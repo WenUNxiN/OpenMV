@@ -134,10 +134,10 @@ class ColorSort():
                 self.move_x=(l+85+cy)*sin
                 time.sleep_ms(100)
                 #移动机械臂到物块上方
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 30, -(int(self.move_y)) + 10, 150, 1000))
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 25, -(int(self.move_y)) + 10, 150, 1000))
                 time.sleep_ms(1000)
                 #移动机械臂下移到物块
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 30, -(int(self.move_y)) + 10, 25+cz, 1000))
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 20, -(int(self.move_y)) + 10, 25+cz, 1000))
                 time.sleep_ms(1200)
                 self.uart.write("{#005P1650T1000!}")#机械爪抓取物块
                 time.sleep_ms(1200)
@@ -184,10 +184,10 @@ class ColorSort():
                 self.move_x=(l+85+cy)*sin
                 time.sleep_ms(100)
                 #移动机械臂到物块上方
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) + 10, -(int(self.move_y)) + 50, 150, 1000))
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) + 5, -(int(self.move_y)) + 40, 150, 1000))
                 time.sleep_ms(1000)
                 #移动机械臂下移到物块
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) + 10, -(int(self.move_y)) + 50, 25+cz+30, 1000))
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) + 5, -(int(self.move_y)) + 40, 25+cz+30, 1000))
                 time.sleep_ms(1200)
                 self.uart.write("{#005P1100T1000!}")#机械爪放下物块
                 time.sleep_ms(1200)

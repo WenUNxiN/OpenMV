@@ -143,7 +143,6 @@ class ColorPalletizer():
                 #机械臂旋转到要方向物块的指定位置
                 self.move_y=140
                 self.move_x=90
-                #self.kinematic.kinematics_move(self.move_y,self.move_x,120,1000)
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
                 time.sleep_ms(1200)
                 if self.palletizer_cnt==0:#第1次码垛
