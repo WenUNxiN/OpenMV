@@ -21,7 +21,7 @@ class ColorTrace():
 
     #机械臂移动位置
     servo0=1500
-    servo1=1500
+    servo1=1250
 
     def init(self):
         sensor.reset() #初始化摄像头
@@ -35,9 +35,9 @@ class ColorTrace():
 
         #机械臂移动位置
         self.servo0 = 1500
-        self.servo1 = 1788
+        self.servo1 = 1250
 
-        self.uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!#002P{:0>4d}T1100!#003P{:0>4d}T1100!}}\n".format(self.servo0,self.servo1,1800,860))
+        self.uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!#002P{:0>4d}T1100!#003P{:0>4d}T1100!}}\n".format(self.servo0,self.servo1,1750,860))
         time.sleep_ms(1000)
 
     def run(self):#运行功能
@@ -65,19 +65,16 @@ class ColorTrace():
             block_cy=max_blob[6]
 
             #************************运动舵机**********************************
-            if(abs(block_cx-80)>=5):
-                if block_cx > 80:
-                    move_x=-0.8*abs(block_cx-80)
-                else:
-                    move_x=0.8*abs(block_cx-80)
-                self.servo0=int(self.servo0+move_x)
+            dead_x = 8
+            if abs(block_cx - 80) > dead_x:
+                move_x = (80 - block_cx) * 0.4   # 负反馈 + 低增益
+                self.servo0 = int(self.servo0 + move_x)
 
-            if(abs(block_cy-60)>=2):
-                if block_cy > 60:
-                    move_y=-1*abs(block_cy-60)
-                else:
-                    move_y=1*abs(block_cy-60)
-                self.servo1=int(self.servo1+move_y)
+            dead_y = 4
+            if abs(block_cy - 60) > dead_y:
+                move_y = (block_cy - 60) * 0.35  # 竖直可以再小一点
+                self.servo1 = int(self.servo1 + move_y)
+
 
 
             if self.servo0>2400: self.servo0=2400
@@ -95,11 +92,4 @@ if __name__ == "__main__":
 
     while(1):
         colorTrace.run()#运行功能
-
-
-
-
-
-
-
 

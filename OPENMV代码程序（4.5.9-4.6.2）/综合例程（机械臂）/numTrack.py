@@ -15,15 +15,15 @@ class NumTrack():
     min_confidence = 0.7
 
     try:
-       # load the model, alloc the model file on the heap if we have at least 64K free after loading
-       net = ml.Model("trained.tflite", load_to_fb=uos.stat('trained.tflite')[6] > (gc.mem_free() - (64*1024)))
+        # load the model, alloc the model file on the heap if we have at least 64K free after loading
+        net = ml.Model("trained.tflite", load_to_fb=uos.stat('trained.tflite')[6] > (gc.mem_free() - (64*1024)))
     except Exception as e:
-       raise Exception('Failed to load "trained.tflite", did you copy the .tflite and labels.txt file onto the mass-storage device? (' + str(e) + ')')
+        raise Exception('Failed to load "trained.tflite", did you copy the .tflite and labels.txt file onto the mass-storage device? (' + str(e) + ')')
 
     try:
-       labels = [line.rstrip('\n') for line in open("labels.txt")]
+        labels = [line.rstrip('\n') for line in open("labels.txt")]
     except Exception as e:
-       raise Exception('Failed to load "labels.txt", did you copy the .tflite and labels.txt file onto the mass-storage device? (' + str(e) + ')')
+        raise Exception('Failed to load "labels.txt", did you copy the .tflite and labels.txt file onto the mass-storage device? (' + str(e) + ')')
 
     colors = [ # Add more colors if you are detecting more than 7 types of classes at once.
         (255,   0,   0),
@@ -48,8 +48,7 @@ class NumTrack():
     mid_block_cy=60.5
 
     servo0 = 1500
-    servo1 = 1500
-    uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!}}\n".format(servo0, servo1))
+    servo1 = 1250
 
     def fomo_post_process(self,model, inputs, outputs):
         ob, oh, ow, oc = model.output_shape[0]
@@ -96,7 +95,9 @@ class NumTrack():
         self.mid_block_cx=cx
         self.mid_block_cy=cy
 
-        self.cap_num_status= 2 #追踪物块的序号
+        self.cap_num_status= 3 #追踪物块的序号
+
+        self.uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!#002P{:0>4d}T1100!#003P{:0>4d}T1100!}}\n".format(self.servo0,self.servo1,1750,860))
 
         time.sleep_ms(1000)
 
@@ -119,20 +120,16 @@ class NumTrack():
                     img.draw_cross(block_cx,block_cy,size=2,color=(255,0,0))
                     img.draw_string(x, y-10, self.labels[i], color=(255,255,255))
 
-        #************************运动舵机**********************************
-        if(abs(block_cx-80)>=5):
-            if block_cx > 80:
-                move_x=-0.8*abs(block_cx-80)
-            else:
-                move_x=0.8*abs(block_cx-80)
-            self.servo0=int(self.servo0+move_x)
+            #************************运动舵机**********************************
+            dead_x = 8
+            if abs(block_cx - 80) > dead_x:
+                move_x = (80 - block_cx) * 0.4   # 负反馈 + 低增益
+                self.servo0 = int(self.servo0 + move_x)
 
-        if(abs(block_cy-60)>=2):
-            if block_cy > 60:
-                move_y=-1*abs(block_cy-60)
-            else:
-                move_y=1*abs(block_cy-60)
-            self.servo1=int(self.servo1+move_y)
+            dead_y = 4
+            if abs(block_cy - 60) > dead_y:
+                move_y = (block_cy - 60) * 0.35  # 竖直可以再小一点
+                self.servo1 = int(self.servo1 + move_y)
 
 
         if self.servo0>2400: self.servo0=2400
@@ -144,4 +141,9 @@ class NumTrack():
         time.sleep_ms(50)
 
 
+if __name__ == "__main__":
+    app=NumTrack()
+    app.init()#初始化
 
+    while(1):
+        app.run()#运行功能

@@ -18,7 +18,7 @@ led = pyb.LED(3)
 
 uart = UART(3,115200)   #设置串口波特率，与stm32一致
 uart.init(115200, bits=8, parity=None, stop=1 )
-uart.write("$KMS:0,100,70,1000!\n")
+uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!#002P{:0>4d}T1100!#003P{:0>4d}T1100!#004P{:0>4d}T1100!#005P{:0>4d}T1100!}}\n".format(1500,1500,1500,1500,1500,1500))
 
 tim = Timer(4, freq=1000) # Frequency in Hz
 led_dac = tim.channel(1, Timer.PWM, pin=Pin("P7"), pulse_width_percent=50)

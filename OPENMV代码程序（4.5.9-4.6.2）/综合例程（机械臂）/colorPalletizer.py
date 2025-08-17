@@ -1,6 +1,5 @@
 import sensor, time,math
 from pyb import Pin,Timer,UART
-import kinematics
 
 class ColorPalletizer():
     red_threshold = (0, 100, 20, 127, 0, 127)
@@ -14,8 +13,6 @@ class ColorPalletizer():
     tim = Timer(4, freq=1000) # Frequency in Hz
     led_dac = tim.channel(1, Timer.PWM, pin=Pin("P7"), pulse_width_percent=0)
 
-    kinematic = kinematics.Kinematics()#逆运动
-
     #物块中心点
     mid_block_cx=80
     mid_block_cy=60
@@ -23,8 +20,8 @@ class ColorPalletizer():
     move_status=0#运行状态标记
 
     #机械臂移动位置
-    move_x=0
-    move_y=100
+    move_y=0
+    move_x=150
 
     mid_block_cnt=0#机械臂移到色块中心计数
     palletizer_cnt=0#记录码垛的数量
@@ -45,17 +42,17 @@ class ColorPalletizer():
         self.palletizer_cnt=0
 
         #机械臂移动位置
-        self.move_x=0
-        self.move_y=100
+        self.move_y=0
+        self.move_x=150
 
-        self.kinematic.kinematics_move(self.move_x,self.move_y,70,1000)
+        self.uart.write("$KMS:{:03d},{:03d},{:03d},1000!\n".format(int(self.move_x), int(self.move_y), 150))
         time.sleep_ms(1000)
 
-    def run(self,cx=0,cy=0,cz=0):#运行功能
+    def run(self,cx=0,cy=0,cz=20):#运行功能
         '''
             3个变量控制机械臂抓取色块时的偏移量,如果机械臂抓取色块失败则调整变量
-            cx: 偏右减小, 偏左增加
-            cy: 偏前减小，偏后增加
+            cx: 偏前减小, 偏后增加
+            cy: 偏右减小，偏左增加
             cz: 偏高减小，偏低增加
         '''
 
@@ -105,14 +102,14 @@ class ColorPalletizer():
             if self.move_status==0:#第0阶段：机械臂寻找物块位置
                 if(abs(block_cx-self.mid_block_cx)>3):
                     if block_cx > self.mid_block_cx:
-                        self.move_x+=0.2
+                        self.move_y+=0.2
                     else:
-                        self.move_x-=0.2
+                        self.move_y-=0.2
                 if(abs(block_cy-self.mid_block_cy)>3):
-                    if block_cy > self.mid_block_cy and self.move_y>80:
-                        self.move_y-=0.3
+                    if block_cy > self.mid_block_cy and self.move_x>80:
+                        self.move_x-=0.3
                     else:
-                        self.move_y+=0.3
+                        self.move_x+=0.3
                 if abs(block_cy-self.mid_block_cy)<=3 and abs(block_cx-self.mid_block_cx)<=3: #寻找到物块，机械臂进入第二阶段
                     self.mid_block_cnt += 1
                     if self.mid_block_cnt>10:#计数10次对准物块，防止误差
@@ -120,45 +117,51 @@ class ColorPalletizer():
                         self.move_status=1
                 else:
                     self.mid_block_cnt=0
-                    self.kinematic.kinematics_move(self.move_x,self.move_y,70,10)
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 10))
                 time.sleep_ms(10)
 
             elif self.move_status==1:#第1阶段：机械臂抓取物块
-                l=math.sqrt(self.move_x*self.move_x+self.move_y*self.move_y)
-                sin=self.move_y/l
-                cos=self.move_x/l
-                self.move_x=(l+85+cy)*cos+cx
-                self.move_y=(l+85+cy)*sin
+                l=math.sqrt(self.move_y*self.move_y+self.move_x*self.move_x)
+                sin=self.move_x/l
+                cos=self.move_y/l
+                self.move_y=(l+85+cy)*cos+cx
+                self.move_x=(l+85+cy)*sin
                 time.sleep_ms(100)
-                self.kinematic.kinematics_move(self.move_x,self.move_y,70,1000)#移动机械臂到物块上方
+                #移动机械臂到物块上方
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) - 25, -(int(self.move_y)), 150, 1000))
                 time.sleep_ms(100)
-                self.kinematic.send_str("{#005P1000T1000!}")#张开爪子
+                self.uart.write("{#005P1100T1000!}")#张开爪子
                 time.sleep_ms(1000)
-                self.kinematic.kinematics_move(self.move_x,self.move_y,25+cz,1000)#移动机械臂下移到物块
+                #移动机械臂下移到物块
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) - 25, -(int(self.move_y)) + 10, 25+cz, 1000))
                 time.sleep_ms(1200)
-                self.kinematic.send_str("{#005P1700T1000!}")#机械爪抓取物块
+                self.uart.write("{#005P1650T1000!}")#机械爪抓取物块
                 time.sleep_ms(1200)
-                self.kinematic.kinematics_move(self.move_x,self.move_y,120,1000)#移动机械臂抬起
+                #移动机械臂抬起
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
                 time.sleep_ms(1200)
                 #机械臂旋转到要方向物块的指定位置
-                self.move_x=140
-                self.move_y=90
-                self.kinematic.kinematics_move(self.move_x,self.move_y,120,1000)
+                self.move_y=140
+                self.move_x=90
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
                 time.sleep_ms(1200)
                 if self.palletizer_cnt==0:#第1次码垛
-                    self.kinematic.kinematics_move(self.move_x,self.move_y,25+cz,1000)
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 25+cz, 1000))
                 elif self.palletizer_cnt==1:#第2次码垛
-                    self.kinematic.kinematics_move(self.move_x-5,self.move_y,25+cz+30,1000)#需要根据实际调整数据
+                    #需要根据实际调整数据
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)-5, -(int(self.move_y)), 25+cz+30, 1000))
                 elif self.palletizer_cnt==2:#第3次码垛
-                    self.kinematic.kinematics_move(self.move_x,self.move_y-5,25+cz+30+30,1000)#需要根据实际调整数据
+                    #需要根据实际调整数据
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 25+cz+30+30, 1000))
                 time.sleep_ms(1200)
-                self.kinematic.send_str("{#005P1000T1000!}")#张开爪子
+                self.uart.write("{#005P1200T1000!}")#张开爪子
                 time.sleep_ms(1200)
-                self.kinematic.kinematics_move(self.move_x,self.move_y,120,1000)#移动机械臂抬起
+                #移动机械臂抬起
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
                 time.sleep_ms(1200)
-                self.move_x=0#机械臂归位
-                self.move_y=100
-                self.kinematic.kinematics_move(self.move_x,self.move_y,70,1000)
+                self.move_y=0#机械臂归位
+                self.move_x=150
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
                 time.sleep_ms(1200)
                 self.move_status=0
                 self.palletizer_cnt=self.palletizer_cnt+1

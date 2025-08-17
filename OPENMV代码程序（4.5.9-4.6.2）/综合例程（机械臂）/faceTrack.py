@@ -32,7 +32,7 @@ class FaceTrack():
     move_y = 0
 
     servo0=1500
-    servo1=1500
+    servo1=1250
     
     servo_option=1#操作舵机选择
     
@@ -55,8 +55,11 @@ class FaceTrack():
         mid_block_cx=120
         mid_block_cy=80
 
-        servo0=1500
-        servo1=1500
+        self.servo0 = 1500
+        self.servo1 = 1250
+
+        self.uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!#002P{:0>4d}T1100!#003P{:0>4d}T1100!}}\n".format(self.servo0,self.servo1,1750,860))
+        
     def run(self):#追踪
         cx = self.mid_block_cx
         cy = self.mid_block_cy
@@ -87,18 +90,19 @@ class FaceTrack():
             img.draw_cross(cx, cy)               # 在目标区域的中心点处画十字
 
             #************************运动机械臂**********************************
-            if abs(cx - self.mid_block_cx)>=5:
-                if cx > self.mid_block_cx:
-                    self.move_x=-0.5*abs(cx-self.mid_block_cx)
-                else:
-                    self.move_x=0.5*abs(cx-self.mid_block_cx)
+            # 水平
+            dead_x = 5
+            if abs(cx - self.mid_block_cx) > dead_x:
+                self.move_x = (self.mid_block_cx - cx) * 0.5      # 负反馈
+            else:
+                self.move_x = 0
 
-
-            if abs(cy - self.mid_block_cy)>=2:
-                if cy > self.mid_block_cy:
-                    self.move_y=-0.8*abs(cy-self.mid_block_cy)
-                else:
-                    self.move_y=0.58*abs(cy-self.mid_block_cy)
+            # 垂直
+            dead_y = 2
+            if abs(cy - self.mid_block_cy) > dead_y:
+                self.move_y = (self.mid_block_cy - cy) * 0.6      # 负反馈（系数可再调小）
+            else:
+                self.move_y = 0
 
                 if self.servo_option==1:
                     self.servo_option=2
@@ -116,4 +120,9 @@ class FaceTrack():
             time.sleep_ms(10)
 
 
+if __name__ == "__main__":
+    app=FaceTrack()
+    app.init()#初始化
 
+    while(1):
+        app.run()#运行功能
