@@ -128,7 +128,7 @@ class ApriltagPalletizer():
                 #移动机械臂抬起
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
                 time.sleep_ms(1200)
-                self.uart.write("{#004P1650T1000!}")#机械爪抓取物块
+                self.uart.write("{#004P1500T1000!}")#机械爪抓取物块
                 time.sleep_ms(100)
                 #机械臂旋转到要方向物块的指定位置
                 self.move_y=140

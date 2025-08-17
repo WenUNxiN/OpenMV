@@ -1,7 +1,6 @@
 import sensor, time
 from pyb import Pin,Timer,UART
 
-
 class ColorTrace():
     red_threshold = (0, 100, 20, 127, 0, 127)
     blue_threshold = (0, 100, -128, 127, -128, -15)

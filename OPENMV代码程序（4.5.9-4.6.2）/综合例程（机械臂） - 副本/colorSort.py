@@ -1,6 +1,5 @@
 import sensor,time,math
 from pyb import Pin,Timer,UART
-import kinematics
 
 class ColorSort():
     red_threshold = (0, 100, 20, 127, 0, 127)
@@ -191,7 +190,8 @@ class ColorSort():
                 time.sleep_ms(1200)
                 self.uart.write("{#005P1100T1000!}")#机械爪放下物块
                 time.sleep_ms(1200)
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))#移动机械臂抬起
+                #移动机械臂抬起
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
                 time.sleep_ms(1200)
                 self.move_y=0#机械臂归位
                 self.move_x=150
