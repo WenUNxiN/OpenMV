@@ -1,238 +1,214 @@
-import sensor, time,math
-from pyb import Pin,Timer,UART
+# =========================  头文件  =========================
+import sensor, time, math
+from pyb import Pin, Timer, UART
 
+# =========================  主类  =========================
 class ApriltagSort():
-    red_threshold=(0, 100, 20, 127, 0, 127)
-    blue_threshold=(0, 60, -128, 127, -128, -28)
-    green_threshold=(0, 100, -128, -28, 0, 70)
-    yellow_threshold=(50, 100, -30, 12, 20, 80)
+    # （颜色阈值保留但不再使用）
+    red_threshold   = (0, 100, 20, 127, 0, 127)
+    blue_threshold  = (0, 60, -128, 127, -128, -28)
+    green_threshold = (0, 100, -128, -28, 0, 70)
+    yellow_threshold= (50, 100, -30, 12, 20, 80)
 
-    uart = UART(3,115200)   #设置串口波特率，与stm32一致
-    uart.init(115200, bits=8, parity=None, stop=1 )
+    # --------------  串口 & LED --------------
+    uart = UART(3, 115200)
+    uart.init(115200, bits=8, parity=None, stop=1)
 
-    tim = Timer(4, freq=1000) # Frequency in Hz
+    tim = Timer(4, freq=1000)                # 1 kHz PWM
     led_dac = tim.channel(1, Timer.PWM, pin=Pin("P7"), pulse_width_percent=50)
-    led_dac.pulse_width_percent(50)
+    led_dac.pulse_width_percent(50)          # 默认 50% 亮度
 
-    cap_color_status=0#抓取物块颜色标志，用来判断物块抓取
-    #机械臂移动位置
-    move_y=0
-    move_x=100
+    # --------------  关键状态变量 --------------
+    target_tag_id = 0       # 当前要处理的 AprilTag ID
+    move_x = 150            # 机械臂 X 坐标（mm）
+    move_y = 0              # 机械臂 Y 坐标（mm）
+    mid_block_cx = 80       # 图像中心 X（QQVGA 160×120）
+    mid_block_cy = 60       # 图像中心 Y
+    mid_block_cnt = 0       # 连续对准计数，用于防抖
+    move_status = 0         # 0找抓取点 1抓取中 2找放置框 3放置中
+    block_degress = 0       # 抓取目标的旋转角（°）
 
-    mid_block_cx=80
-    mid_block_cy=60
+    # 如需“抓取A→放置B”的映射，可在此配置
+    # 例：place_id_map = {1:10, 2:20}
+    place_id_map = {}
 
-    mid_block_cnt=0#用来记录机械臂已对准物块计数，防止误差
-    move_status=0#机械臂移动的方式
-    apriltag_succeed_flag=0#用来记录已经抓取到标签
-    block_degress=0#机械爪旋转角度
+    # =========================  初始化摄像头  =========================
+    def init(self):
+        sensor.reset()
+        sensor.set_pixformat(sensor.RGB565)
+        sensor.set_framesize(sensor.QQVGA)  # 160×120
+        sensor.skip_frames(n=2000)
+        sensor.set_auto_gain(True)
+        sensor.set_auto_whitebal(True)
 
-    def init(self):#初始化
-        sensor.reset() #初始化摄像头
-        sensor.set_pixformat(sensor.RGB565) #图像格式为 RGB565 灰度 GRAYSCALE
-        sensor.set_framesize(sensor.QQVGA) #QQVGA: 160x120
-        sensor.skip_frames(n=2000) #在更改设置后，跳过n张照片，等待感光元件变稳定
-        sensor.set_auto_gain(True) #使用颜色识别时需要关闭自动自动增益
-        sensor.set_auto_whitebal(True)#使用颜色识别时需要关闭自动自动白平衡
-
-        self.uart.init(115200, bits=8, parity=None, stop=1 )
-        self.led_dac.pulse_width_percent(0)
-
-        self.cap_color_status=0#抓取物块颜色标志，用来判断物块抓取
-        #机械臂移动位置
-        self.move_y=0
-        self.move_x=150
-
-        self.mid_block_cnt=0#用来记录机械臂已对准物块计数，防止误差
-        self.move_status=0#机械臂移动的方式
-
-        #用来记录已经抓取到标签
-        self.apriltag_succeed_flag=0
-
-        self.block_degress=0#机械爪旋转角度
-
-        self.uart.write("$KMS:{:03d},{:03d},{:03d},1000!\n".format(int(self.move_x), int(self.move_y), 150))
+        self.led_dac.pulse_width_percent(0)   # 关灯
+        # 先让机械臂回到初始位置
+        self.uart.write("$KMS:{:03d},{:03d},{:03d},1000!\n"
+                        .format(int(self.move_x), int(self.move_y), 120))
         time.sleep_ms(1000)
 
-    def run(self,cx=0,cy=0,cz=0):#运行功能
-        '''
-            3个变量控制机械臂抓取色块时的偏移量,如果机械臂抓取色块失败则调整变量
-            cx: 偏右减小, 偏左增加
-            cy: 偏前减小，偏后增加
-            cz: 偏高减小，偏低增加
-        '''
-        #物块中心点
-        block_cx=self.mid_block_cx
-        block_cy=self.mid_block_cy
-        color_read_succed=0#是否识别到标签
-        # 获取图像
+    # =========================  选最近 Tag  =========================
+    def _pick_best_tag(self, tags):
+        if not tags:
+            return None
+        cx, cy = self.mid_block_cx, self.mid_block_cy
+        # 用距离平方选离中心最近的 tag
+        best = min(tags, key=lambda t: (t.cx - cx) ** 2 + (t.cy - cy) ** 2)
+        return best
+
+    # =========================  主循环  =========================
+    def run(self, cx=0, cy=0, cz=0):
+        """
+        cx,cy,cz：微调抓取/放置时的偏移量，单位 mm
+        """
+        block_cx = self.mid_block_cx
+        block_cy = self.mid_block_cy
+        have_target = False
         img = sensor.snapshot()
-        if self.apriltag_succeed_flag==0:#识别抓取标签
-            self.led_dac.pulse_width_percent(0)
-            for tag in img.find_apriltags(): # defaults to TAG36H11 without "families".
-                img.draw_rectangle(tag.rect, color = (255, 0, 0))     #画框
-                img.draw_cross(tag.cx, tag.cy, color = (0, 255, 0)) #画十字
-                img.draw_string(tag.x, (tag.y-10), "{}".format(tag.id), color=(255,0,0))
-                block_cx=tag.cx
-                block_cy=tag.cy
-                self.block_degress = 180 * tag.rotation / math.pi  #求April Tags旋转的角度
-                self.cap_color_status=tag.id
-                color_read_succed=1
 
-        elif self.apriltag_succeed_flag==1:#抓取到标签后颜色分拣
-            self.led_dac.pulse_width_percent(100)
-            red_blobs = img.find_blobs([self.red_threshold],x_stride=15, y_stride=15, pixels_threshold=25 )
-            blue_blobs = img.find_blobs([self.blue_threshold], x_stride=15, y_stride=15, pixels_threshold=25 )
-            green_blobs = img.find_blobs([self.green_threshold], x_stride=15, y_stride=15, pixels_threshold=25 )
-            #***************首先进行色块检测********************
-            if red_blobs and self.cap_color_status==1:#红色
-                color_read_succed=1
-                for y in red_blobs:
-                    img.draw_rectangle((y[0],y[1],y[2],y[3]),color=(255,255,255))
-                    img.draw_cross(y[5], y[6],size=2,color=(255,0,0))
-                    img.draw_string(y[0], (y[1]-10), "red", color=(255,0,0))
-                    #print("中心X坐标",y[5],"中心Y坐标",y[6],"识别颜色类型","红色")
-                    block_cx=y[5]
-                    block_cy=y[6]
+        # --------------  阶段0/1：找抓取目标  --------------
+        tags = img.find_apriltags()
+        if self.move_status < 2:
+            tag = self._pick_best_tag(tags)
+            if tag:
+                # 画框、画十字、写 ID
+                img.draw_rectangle(tag.rect, color=(255, 0, 0))
+                img.draw_cross(tag.cx, tag.cy, color=(0, 255, 0))
+                img.draw_string(tag.x, tag.y - 10, "{}".format(tag.id), color=(255, 0, 0))
+                # 保存目标信息
+                block_cx, block_cy = tag.cx, tag.cy
+                self.block_degress = 180 * tag.rotation / math.pi
+                self.target_tag_id = tag.id
+                have_target = True
 
-            elif blue_blobs and self.cap_color_status==2:#蓝色
-                color_read_succed=1
-                for y in blue_blobs:
-                    img.draw_rectangle((y[0],y[1],y[2],y[3]),color=(255,255,255))
-                    img.draw_cross(y[5], y[6],size=2,color=(0,0,255))
-                    img.draw_string(y[0], (y[1]-10), "blue", color=(0,0,255))
-                    #print("中心X坐标",y[5],"中心Y坐标",y[6],"识别颜色类型","蓝色")
-                    block_cx=y[5]
-                    block_cy=y[6]
+        # --------------  阶段2/3：找放置框  --------------
+        else:
+            # 支持“抓取ID→放置ID”映射
+            place_id = self.place_id_map.get(self.target_tag_id, self.target_tag_id)
+            # 过滤出目标放置框
+            tags = [t for t in tags if t.id == place_id] or tags
+            tag = self._pick_best_tag(tags)
+            if tag:
+                img.draw_rectangle(tag.rect, color=(255, 255, 255))
+                img.draw_cross(tag.cx, tag.cy, size=2, color=(255, 255, 255))
+                img.draw_string(tag.x, tag.y - 10, "dst:{}".format(tag.id), color=(255, 255, 255))
+                block_cx, block_cy = tag.cx, tag.cy
+                have_target = True
 
-            elif green_blobs and self.cap_color_status==3:#绿色
-                color_read_succed=1
-                for y in green_blobs:
-                    img.draw_rectangle((y[0],y[1],y[2],y[3]),color=(255,255,255))
-                    img.draw_cross(y[5], y[6],size=2,color=(0,255,0))
-                    img.draw_string(y[0], (y[1]-10), "green", color=(0,255,0))
-                    #print("中心X坐标",y[5],"中心Y坐标",y[6],"识别颜色类型","绿色")
-                    block_cx=y[5]
-                    block_cy=y[6]
-
-        #************************************************ 运动机械臂*************************************************************************************
-        if color_read_succed==1 or (self.move_status==1):#识别到颜色或者到路口
-
-            if self.move_status==0:#第0阶段：机械臂寻找物块位置
-                if(abs(block_cx-self.mid_block_cx)>3):
-                    if block_cx > self.mid_block_cx:
-                        self.move_y+=0.2
-                    else:
-                        self.move_y-=0.2
-                if(abs(block_cy-self.mid_block_cy)>3):
-                    if block_cy > self.mid_block_cy and self.move_x>80:
-                        self.move_x-=0.3
-                    else:
-                        self.move_x+=0.3
-                if abs(block_cy-self.mid_block_cy)<=3 and abs(block_cx-self.mid_block_cx)<=3: #寻找到物块，机械臂进入第二阶段
+        # =========================  状态机 =========================
+        if have_target or (self.move_status == 1):  # 有目标或已抓取
+            # ---- 阶段0：对准抓取点 ----
+            if self.move_status == 0:
+                if abs(block_cx - self.mid_block_cx) > 3:
+                    self.move_y += 0.2 if block_cx > self.mid_block_cx else -0.2
+                if abs(block_cy - self.mid_block_cy) > 3:
+                    self.move_x += 0.3 if block_cy < self.mid_block_cy or self.move_x <= 80 else -0.3
+                # 连续对准 10 次后进入抓取
+                if abs(block_cx - self.mid_block_cx) <= 3 and abs(block_cy - self.mid_block_cy) <= 3:
                     self.mid_block_cnt += 1
-                    if self.mid_block_cnt>10:#计数10次对准物块，防止误差
-                        self.mid_block_cnt=0
-                        self.move_status=1
+                    if self.mid_block_cnt > 10:
+                        self.mid_block_cnt = 0
+                        self.move_status = 1
                 else:
-                    self.mid_block_cnt=0
-                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 10))
+                    self.mid_block_cnt = 0
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                    .format(int(self.move_x), -int(self.move_y), 120, 10))
                 time.sleep_ms(10)
 
-            elif self.move_status==1:#第1阶段：机械臂抓取物块
-                self.move_status=2
-                # 判断矩形倾角，改变机械爪
-                spin_calw = 1500
-                if self.block_degress % 90 < 45:
-                    spin_calw = int(1500 - self.block_degress % 90 * 500 / 90)
-                else:
-                    spin_calw = int((90 - self.block_degress % 90) * 500 / 90 + 1500)
+            # ---- 阶段1：抓取动作 ----
+            elif self.move_status == 1:
+                self.move_status = 2
+                # 计算夹爪旋转 PWM
+                deg = self.block_degress % 90
+                spin_calw = int(1500 - deg * 500 / 90) if deg < 45 \
+                            else int((90 - deg) * 500 / 90 + 1500)
+                spin_calw = max(500, min(2500, spin_calw))
 
-                if spin_calw >= 2500 or spin_calw <= 500:
-                    spin_calw = 1500
-                self.uart.write("{{#004P{:0^4}T1000!}}".format(spin_calw))#旋转和张开机械爪
-                l=math.sqrt(self.move_y*self.move_y+self.move_x*self.move_x)
-                sin=self.move_x/l
-                cos=self.move_y/l
-                self.move_y=(l+85+cy)*cos+cx
-                self.move_x=(l+85+cy)*sin
+                # 发送旋转、张开
+                self.uart.write("{{#004P{:04d}T1000!}}".format(spin_calw))
+                # 根据偏移量重新计算坐标
+                l = math.sqrt(self.move_y ** 2 + self.move_x ** 2)
+                sin, cos = self.move_x / l, self.move_y / l
+                self.move_y = (l + 85 + cy) * cos + cx
+                self.move_x = (l + 85 + cy) * sin
                 time.sleep_ms(100)
-                self.uart.write("{#005P1000T1000!}")
+                self.uart.write("{#005P1100T1000!}")        # 张开爪子
                 time.sleep_ms(100)
-                #移动机械臂到物块上方
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 25, -(int(self.move_y)) + 10, 150, 1000))
-                time.sleep_ms(1200)
-                #移动机械臂下移到物块
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 20, -(int(self.move_y)) + 10, 25+cz, 1000))
-                time.sleep_ms(1200)
-                self.uart.write("{#005P1650T1000!}")#机械爪抓取物块
-                time.sleep_ms(1200)
-                #移动机械臂抬起
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
-                time.sleep_ms(1200)
-                self.uart.write("{#004P1500T1000!}")#旋转和张开机械爪
-                time.sleep_ms(100)
-                #机械臂旋转到要方向物块的指定位置
-                self.move_y=120
-                self.move_x=60
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
-                time.sleep_ms(1200)
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
-                time.sleep_ms(1200)
-                self.mid_block_cnt=0
-                self.apriltag_succeed_flag=1#抓取到标签后颜色分拣
 
-            elif self.move_status==2:#第2阶段：机械臂寻找放下物块的框框
-                if(abs(block_cx-self.mid_block_cx)>3):
-                    if block_cx > self.mid_block_cx and self.move_x>1:
-                        self.move_x-=0.3
-                    else:
-                        self.move_x+=0.3
-                if(abs(block_cy-self.mid_block_cy)>3):
-                    if block_cy > self.mid_block_cy:
-                        self.move_y-=0.2
-                    else:
-                        self.move_y+=0.2
-                if abs(block_cy-self.mid_block_cy)<=3 and abs(block_cx-self.mid_block_cx)<=3: #寻找到物块，机械臂进入第二阶段
+                # 移动到目标上方
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x) - 30, -int(self.move_y) + 10, 120, 1000))
+                time.sleep_ms(1200)
+                # 下降
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x) - 30, -int(self.move_y) + 10, 5 + cz, 1000))
+                time.sleep_ms(1200)
+                self.uart.write("{#005P1650T1000!}")        # 闭合爪子
+                time.sleep_ms(1200)
+                # 抬起
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x), -int(self.move_y), 120, 1000))
+                time.sleep_ms(1200)
+                self.uart.write("{#004P1500T1000!}")        # 爪子回正
+                time.sleep_ms(100)
+
+                # 过渡到放置区上方
+                self.move_y, self.move_x = -120, 0
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x), -int(self.move_y), 120, 1000))
+                time.sleep_ms(1200)
+                self.mid_block_cnt = 0
+
+            # ---- 阶段2：对准放置框（方向与阶段0相反） ----
+            elif self.move_status == 2:
+                if abs(block_cx - self.mid_block_cx) > 3:
+                    self.move_x += 0.3 if block_cx > self.mid_block_cx else -0.3
+                if abs(block_cy - self.mid_block_cy) > 3:
+                    self.move_y += 0.2 if block_cy > self.mid_block_cy else -0.2
+                # 连续对准 5 次后进入放置
+                if abs(block_cx - self.mid_block_cx) <= 3 and abs(block_cy - self.mid_block_cy) <= 3:
                     self.mid_block_cnt += 1
-                    if self.mid_block_cnt>5:#计数5次对准物块，防止误差
-                        self.mid_block_cnt=0
-                        self.move_status=3
+                    if self.mid_block_cnt > 5:
+                        self.mid_block_cnt = 0
+                        self.move_status = 3
                 else:
-                    self.mid_block_cnt=0
-                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 10))
+                    self.mid_block_cnt = 0
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                    .format(int(self.move_x), -int(self.move_y), 120, 10))
                 time.sleep_ms(10)
 
-            elif self.move_status==3:#第3阶段：机械臂放下物块并归位
-                self.move_status=0
-                l=math.sqrt(self.move_y*self.move_y+self.move_x*self.move_x)
-                sin=self.move_x/l
-                cos=self.move_y/l
-                self.move_y=(l+85+cy)*cos
-                self.move_x=(l+85+cy)*sin
-                #移动机械臂到物块上方
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) + 5, -(int(self.move_y)) + 40, 150, 1000))
+            # ---- 阶段3：放下并归位 ----
+            elif self.move_status == 3:
+                self.move_status = 0
+                l = math.sqrt(self.move_y ** 2 + self.move_x ** 2)
+                sin, cos = self.move_x / l, self.move_y / l
+                self.move_y = (l + 85 + cy) * cos
+                self.move_x = (l + 85 + cy) * sin
+                # 移动到放置点上方
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x), -int(self.move_y) - 35, 120, 1000))
                 time.sleep_ms(1200)
-                #移动机械臂下移到物块
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) + 5, -(int(self.move_y)) + 40, 25+cz+30, 1000))
+                # 下降
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x), -int(self.move_y) - 35, 5 + cz, 1000))
                 time.sleep_ms(1200)
-                self.uart.write("{#005P1100T1000!}")#机械爪放下物块
+                self.uart.write("{#005P1100T1000!}")        # 张开爪子放下
                 time.sleep_ms(1200)
-                #移动机械臂抬起
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
+                # 抬起
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x), -int(self.move_y) - 35, 120, 1000))
                 time.sleep_ms(1200)
-                self.move_y=0#机械臂归位
-                self.move_x=150
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
+                # 复位
+                self.move_y, self.move_x = 0, 150
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x), -int(self.move_y), 120, 1000))
                 time.sleep_ms(1200)
-                self.mid_block_cnt=0
-                self.cap_color_status=0
-                self.apriltag_succeed_flag=0#识别抓取标签
+                self.mid_block_cnt = 0
+                self.target_tag_id = 0      # 清掉目标，等待下一次
 
-
+# =========================  程序入口  =========================
 if __name__ == "__main__":
-    app=ApriltagSort()
-    app.init()#初始化
-
-    while(1):
-        app.run(0,0,0)#运行功能
+    app = ApriltagSort()
+    app.init()
+    while True:
+        app.run(0, 0, 0)
