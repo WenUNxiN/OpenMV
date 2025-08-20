@@ -38,7 +38,7 @@ class ApriltagNumSort():
     cap_num_status=0#抓取物块颜色标志，用来判断物块抓取
     #机械臂移动位置
     move_y=0
-    move_x=100
+    move_x=150
 
     mid_block_cx=80
     mid_block_cy=60
@@ -79,7 +79,7 @@ class ApriltagNumSort():
 
         self.block_degress=0#机械爪旋转角度
 
-        self.uart.write("$KMS:{:03d},{:03d},{:03d},1000!\n".format(int(self.move_x), int(self.move_y), 150))
+        self.uart.write("$KMS:{:03d},{:03d},{:03d},1000!\n".format(int(self.move_x), int(self.move_y), 120))
         time.sleep_ms(1000)
 
     def fomo_post_process(self,model, inputs, outputs):
@@ -175,7 +175,7 @@ class ApriltagNumSort():
                         self.move_status=1
                 else:
                     self.mid_block_cnt=0
-                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 10))
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 120, 10))
                 time.sleep_ms(10)
 
             elif self.move_status==1:#第1阶段：机械臂抓取物块
@@ -198,30 +198,30 @@ class ApriltagNumSort():
                 self.move_x=(l+85+cy)*sin
                 time.sleep_ms(100)
                 #移动机械臂到物块上方
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 25, -(int(self.move_y)) + 15, 150, 1000))
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 25, -(int(self.move_y)) + 15, 120, 1000))
                 time.sleep_ms(100)
                 self.uart.write("{#005P1100T1000!}")
                 time.sleep_ms(1000)
                 #移动机械臂下移到物块
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 25, -(int(self.move_y)) + 15, 25+cz, 1000))
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 25, -(int(self.move_y)) + 15, 5+cz, 1000))
                 time.sleep_ms(1200)
                 self.uart.write("{#005P1650T1000!}")#机械爪抓取物块
                 time.sleep_ms(1200)
                 #移动机械臂抬起
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 120, 1000))
                 self.uart.write("{#004P1500T1000!}")#旋转和张开机械爪
                 time.sleep_ms(1200)
                 #机械臂旋转到要方向物块的指定位置
                 if self.cap_num_status==1:
-                    self.move_y=-130
-                    self.move_x=110
+                    self.move_y=-150
+                    self.move_x=-30
                 elif self.cap_num_status==2:
-                    self.move_y=-130
-                    self.move_x=20
+                    self.move_y=-150
+                    self.move_x=30
                 elif self.cap_num_status==3:
                     self.move_y=-130
-                    self.move_x=-30
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
+                    self.move_x=60
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 120, 1000))
                 time.sleep_ms(1200)
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 50, 1000))
                 time.sleep_ms(1200)
@@ -231,14 +231,15 @@ class ApriltagNumSort():
             elif self.move_status==2:#第2阶段：机械臂寻找放下物块的框框
                 if(abs(block_cx-self.mid_block_cx)>5):
                     if block_cx > self.mid_block_cx and self.move_x>1:
-                        self.move_x+=0.3
-                    else:
                         self.move_x-=0.3
+                    else:
+                        self.move_x+=0.3
                 if(abs(block_cy-self.mid_block_cy)>5):
                     if block_cy > self.mid_block_cy:
                         self.move_y+=0.2
                     else:
                         self.move_y-=0.2
+
                 if abs(block_cy-self.mid_block_cy)<=5 and abs(block_cx-self.mid_block_cx)<=5: #寻找到物块，机械臂进入第二阶段
                     self.mid_block_cnt += 1
                     if self.mid_block_cnt>5:#计数5次对准物块，防止误差
@@ -261,16 +262,16 @@ class ApriltagNumSort():
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) - 10, -(int(self.move_y)) - 40, 70, 1000))
                 time.sleep_ms(1200)
                 #移动机械臂下移到物块
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) - 10, -(int(self.move_y)) - 40, 25+cz, 1000))
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) - 10, -(int(self.move_y)) - 40, 5+cz, 1000))
                 time.sleep_ms(1200)
                 self.uart.write("{#005P1100T1000!}")#机械爪放下物块
                 time.sleep_ms(1200)
                 #移动机械臂抬起
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 120, 1000))
                 time.sleep_ms(1200)
                 self.move_y=0#机械臂归位
                 self.move_x=150
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 150, 1000))
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 120, 1000))
                 time.sleep_ms(1200)
                 self.mid_block_cnt=0
                 self.cap_num_status=0
