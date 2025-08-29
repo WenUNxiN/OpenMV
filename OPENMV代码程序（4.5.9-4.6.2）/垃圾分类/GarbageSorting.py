@@ -71,11 +71,18 @@ class GarbageSortingArm:
     # ----------------------------------------------------------
     place_id_map = {"harmful": 1, "kitchen": 2, "recoverable": 3}
 
+    coarse_pos = {
+        "harmful"   : (-20,  120),
+        "kitchen"   : (20, 150),
+        "recoverable": (50,120)
+    }#放置区
+
     color_th = {
         "red"  : [(0, 100,  20, 127,   0, 127)],
-        "green": [(0, 100, -128, -28,  0,  70)],
+        "green": [(0, 49, -4, -44, 98, -68)],
         "blue" : [(0, 100, -128, 127,-128, -15)]
-    }
+    }#放置区颜色
+
     color_id = {"red": 1, "green": 2, "blue": 3}
 
     # ----------------------------------------------------------
@@ -118,41 +125,44 @@ class GarbageSortingArm:
     # 工具函数
     # ==========================================================
     def detect_and_square(self, img):
-        """
-        全图跑 FOMO → 取最高置信目标 → 生成正方形 ROI
-        返回:  (x,y,w,h,label,score)  或 None
-        """
-        detections = self.net.predict([img], callback=self.fomo_post)
+           """
+           先按优先级挑类别，再取该类里置信最高的目标
+           """
+           detections = self.net.predict([img], callback=self.fomo_post)
 
-        best = None
-        best_score = 0.0
+           # 优先级表，越靠前越高
+           priority = ["harmful", "kitchen", "recoverable"]
 
-        for cls_id, det_list in enumerate(detections):
-            if cls_id == 0:
-                continue
-            for (x, y, w, h, score) in det_list:
-                if score > best_score and score >= self.min_confidence:
-                    best_score = score
-                    best = (x, y, w, h, self.labels[cls_id], score)
+           chosen = None          # (x,y,w,h,label,score)
+           for lbl in priority:
+               cls_id = self.labels.index(lbl) if lbl in self.labels else -1
+               if cls_id < 0:
+                   continue
+               det_list = detections[cls_id]
+               if det_list:
+                   # 取该类别里置信最高的
+                   best = max(det_list, key=lambda d: d[4])
+                   x, y, w, h, score = best
+                   chosen = (x, y, w, h, lbl, score)
+                   break   # 只要优先级最高的类别里有目标就结束
 
-        if best is None:
-            self.target_rect = None
-            return None
+           if chosen is None:
+               self.target_rect = None
+               return None
 
-        # 以检测中心生成正方形，边长取 max(w,h) + 10
-        cx = best[0] + best[2]//2
-        cy = best[1] + best[3]//2
-        side = max(best[2], best[3]) + 10
-        x = max(0, cx - side//2)
-        y = max(0, cy - side//2)
-        side = min(side, self.IMG_W - x, self.IMG_H - y)
-        self.target_rect = (x, y, side, side)
+           # 画正方形 ROI
+           cx = chosen[0] + chosen[2]//2
+           cy = chosen[1] + chosen[3]//2
+           side = max(chosen[2], chosen[3]) + 10
+           x = max(0, cx - side//2)
+           y = max(0, cy - side//2)
+           side = min(side, self.IMG_W - x, self.IMG_H - y)
+           self.target_rect = (x, y, side, side)
 
-        # 画正方形
-        img.draw_rectangle((x, y, side, side), color=(0, 255, 0))
-        img.draw_string(x, y-10, "{}:{:.2f}".format(best[4], best[5]),
-                        color=self.colors[cls_id % len(self.colors)], scale=2)
-        return best[4], best[5]
+           img.draw_rectangle((x, y, side, side), color=(0, 255, 0))
+           img.draw_string(x, y-10, "{}:{:.2f}".format(chosen[4], chosen[5]),
+                           color=self.colors[self.labels.index(chosen[4]) % len(self.colors)], scale=2)
+           return chosen[4], chosen[5]
 
     def find_color_blob(self, img, color_name):
         blobs = img.find_blobs(self.color_th[color_name], pixels_threshold=150)
@@ -174,12 +184,11 @@ class GarbageSortingArm:
             label_score = self.detect_and_square(img)
             if label_score:
                 label, score = label_score
-                self.uart.write("A0")
+
                 if label in self.place_id_map:
                     x, y, w, h = self.target_rect
                     cx_sq = x + w//2
                     cy_sq = y + h//2
-                    self.uart.write("A1")
                     # 微小步对准
                     if abs(cx_sq - self.MID_X) > 3:
                         self.move_y += 0.3 if cx_sq > self.MID_X else -0.3
@@ -244,12 +253,17 @@ class GarbageSortingArm:
                                 .format(int(self.move_x), -int(self.move_y), 120, 1000))
                 time.sleep_ms(1200)
 
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(150, 0, 120, 1000))
+                time.sleep_ms(1200)
+
                 # 7. 前往放置区粗位置
-                self.move_y = 120
-                self.move_x = 0
+                # 根据垃圾类型选粗位置
+                x0, y0 = self.coarse_pos[self.target_class]
+                self.move_x = x0
+                self.move_y = y0
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x), -int(self.move_y), 120, 1000))
-                time.sleep_ms(1200)
 
                 self.stage = 2
                 self.move_status = 0
@@ -301,18 +315,26 @@ class GarbageSortingArm:
             time.sleep_ms(1000)
 
             self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                            .format(int(self.move_x), -int(self.move_y), 5+cz, 1000))
+                            .format(int(self.move_x), -int(self.move_y), 5+cz+90, 1000))
             time.sleep_ms(1200)
 
-            self.uart.write("{#005P1100T1000!}")   # 张开
+            self.uart.write("{#005P1200T1000!}")   # 张开
             time.sleep_ms(1200)
 
             self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                             .format(int(self.move_x), -int(self.move_y), 120, 1000))
             time.sleep_ms(1200)
 
+            self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                            .format(0, -120, 120, 1000))
+            time.sleep_ms(1200)
+
             self.move_y = 0
             self.move_x = 150
+            self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                            .format(int(self.move_x), -int(self.move_y), 120, 1000))
+            time.sleep_ms(1200)
+
             self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                             .format(int(self.move_x), -int(self.move_y), 50, 1000))
             time.sleep_ms(1200)
