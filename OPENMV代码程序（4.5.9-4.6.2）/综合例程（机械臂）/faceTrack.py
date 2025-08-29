@@ -33,10 +33,10 @@ class FaceTrack():
 
     servo0=1500
     servo1=1250
-    
+
     servo_option=1#操作舵机选择
-    
-    def init(self,cx=80.5,cy=60.5):#初始化巡线配置，传入两个参数调整中位值
+
+    def init(self,cx=80.5,cy=60.5):#传入两个参数调整中位值
         sensor.reset() #初始化摄像头
         # HQVGA和灰度对于人脸识别效果最好
         sensor.set_pixformat(sensor.GRAYSCALE) #图像格式为 RGB565 灰度 GRAYSCALE
@@ -58,8 +58,9 @@ class FaceTrack():
         self.servo0 = 1500
         self.servo1 = 1250
 
-        self.uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!#002P{:0>4d}T1100!#003P{:0>4d}T1100!}}\n".format(self.servo0,self.servo1,1750,860))
-        
+        self.uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!#002P{:0>4d}T1100!#003P{:0>4d}T1100!}}\n"
+                        .format(self.servo0,self.servo1,1750,860))
+
     def run(self):#追踪
         cx = self.mid_block_cx
         cy = self.mid_block_cy

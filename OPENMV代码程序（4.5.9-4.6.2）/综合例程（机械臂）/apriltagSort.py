@@ -4,12 +4,6 @@ from pyb import Pin, Timer, UART
 
 # =========================  主类  =========================
 class ApriltagSort():
-    # （颜色阈值保留但不再使用）
-    red_threshold   = (0, 100, 20, 127, 0, 127)
-    blue_threshold  = (0, 60, -128, 127, -128, -28)
-    green_threshold = (0, 100, -128, -28, 0, 70)
-    yellow_threshold= (50, 100, -30, 12, 20, 80)
-
     # --------------  串口 & LED --------------
     uart = UART(3, 115200)
     uart.init(115200, bits=8, parity=None, stop=1)
