@@ -2,7 +2,7 @@ from pyb import UART, Pin,Timer
 import time, pyb
 import apriltagNumSort,apriltagPalletizer,apriltagSort
 import colorSort,colorPalletizer,colorTrace
-import faceTrack,apriltagTrack,numTrack
+import faceTrack,apriltagTrack,numTrack,GarbageSorting
 
 apriltag_Num_Sort = apriltagNumSort.ApriltagNumSort()
 apriltag_Palletizer = apriltagPalletizer.ApriltagPalletizer()
@@ -13,6 +13,7 @@ color_Trace = colorTrace.ColorTrace()
 face_Track = faceTrack.FaceTrack()
 april_tag_track = apriltagTrack.ApriltagTrack()
 num_track = numTrack.NumTrack()
+garbage_sorting = GarbageSorting.GarbageSortingArm()
 
 led = pyb.LED(3)
 
@@ -63,6 +64,8 @@ if __name__ == "__main__":
                     elif string.find("#RunStop!") >= 0 :#停止所有运行并复位
                         run_app_status=0
                         led_dac.pulse_width_percent(0)
+                        uart.write("$KMS:{:03d},{:03d},{:03d},1000!\n"
+                                                .format(150, 0, 120))
                         beep()
                     elif string.find("#ColorSort!") >= 0 :#色块分拣
                         run_app_status=1
@@ -100,6 +103,10 @@ if __name__ == "__main__":
                         run_app_status=9
                         april_tag_track.init()
                         beep()
+                    elif string.find("#GarbageSorting!") >= 0 :#垃圾分类
+                        run_app_status=10
+                        garbage_sorting.init()
+                        beep()
             except Exception as e:#串口数据异常进入
                 print('Error:', e)
 
@@ -121,7 +128,5 @@ if __name__ == "__main__":
             num_track.run()#数字识别追踪
         elif run_app_status==9:
             april_tag_track.run()#二维码追踪
-
-
-
-
+        elif run_app_status==10:
+            garbage_sorting.run()#垃圾分类
