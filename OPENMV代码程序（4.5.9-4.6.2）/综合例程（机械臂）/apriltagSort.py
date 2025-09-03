@@ -38,7 +38,7 @@ class ApriltagSort():
         self.led_dac.pulse_width_percent(0)   # 关灯
         # 先让机械臂回到初始位置
         self.uart.write("$KMS:{:03d},{:03d},{:03d},1000!\n"
-                        .format(int(self.move_x), int(self.move_y), 120))
+                        .format(int(self.move_x), int(self.move_y), 70))
         time.sleep_ms(1000)
 
     # =========================  选最近 Tag  =========================
@@ -59,6 +59,8 @@ class ApriltagSort():
         block_cy = self.mid_block_cy
         have_target = False
         img = sensor.snapshot()
+
+        place_id = self.place_id_map.get(self.target_tag_id, self.target_tag_id)
 
         # --------------  阶段0/1：找抓取目标  --------------
         tags = img.find_apriltags()
@@ -106,7 +108,7 @@ class ApriltagSort():
                 else:
                     self.mid_block_cnt = 0
                     self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                    .format(int(self.move_x), -int(self.move_y), 120, 10))
+                                    .format(int(self.move_x), -int(self.move_y), 70, 10))
                 time.sleep_ms(10)
 
             # ---- 阶段1：抓取动作 ----
@@ -126,7 +128,7 @@ class ApriltagSort():
                 self.move_y = (l + 85 + cy) * cos + cx
                 self.move_x = (l + 85 + cy) * sin
                 time.sleep_ms(100)
-                self.uart.write("{#005P1100T1000!}")        # 张开爪子
+                self.uart.write("{#005P1300T1000!}")        # 张开爪子
                 time.sleep_ms(100)
 
                 # 移动到目标上方
@@ -135,9 +137,9 @@ class ApriltagSort():
                 time.sleep_ms(1200)
                 # 下降
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                .format(int(self.move_x) - 30, -int(self.move_y) + 10, 5 + cz, 1000))
+                                .format(int(self.move_x) - 30 - 10, -int(self.move_y) + 10, 5 + cz, 1000))
                 time.sleep_ms(1200)
-                self.uart.write("{#005P1650T1000!}")        # 闭合爪子
+                self.uart.write("{#005P1750T1000!}")        # 闭合爪子
                 time.sleep_ms(1200)
                 # 抬起
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
@@ -147,7 +149,16 @@ class ApriltagSort():
                 time.sleep_ms(100)
 
                 # 过渡到放置区上方
-                self.move_y, self.move_x = -120, 0
+                if place_id==1:
+                    self.move_y=-120
+                    self.move_x=-50
+                elif place_id==2:
+                    self.move_y=-120
+                    self.move_x=30
+                elif place_id==3:
+                    self.move_y=-120
+                    self.move_x=80
+
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x), -int(self.move_y), 120, 1000))
                 time.sleep_ms(1200)
@@ -182,12 +193,25 @@ class ApriltagSort():
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x), -int(self.move_y) - 35, 120, 1000))
                 time.sleep_ms(1200)
-                # 下降
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                .format(int(self.move_x), -int(self.move_y) - 35, 5 + cz, 1000))
+                if place_id == 1: # 1
+                    # 下降
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                    .format(int(self.move_x) + 10, -int(self.move_y) - 35 - 20, 5 + cz, 1000))
+
+                elif place_id == 2:
+                    # 下降
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                    .format(int(self.move_x) - 15, -int(self.move_y) - 35 - 20, 5 + cz, 1000))
+
+                elif place_id == 3:
+                    # 下降
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                    .format(int(self.move_x) - 20 - 20, -int(self.move_y) - 35, 5 + cz, 1000))
+
                 time.sleep_ms(1200)
                 self.uart.write("{#005P1100T1000!}")        # 张开爪子放下
                 time.sleep_ms(1200)
+
                 # 抬起
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x), -int(self.move_y) - 35, 120, 1000))
@@ -195,7 +219,7 @@ class ApriltagSort():
                 # 复位
                 self.move_y, self.move_x = 0, 150
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                .format(int(self.move_x), -int(self.move_y), 120, 1000))
+                                .format(int(self.move_x), -int(self.move_y), 70, 1000))
                 time.sleep_ms(1200)
                 self.mid_block_cnt = 0
                 self.target_tag_id = 0      # 清掉目标，等待下一次

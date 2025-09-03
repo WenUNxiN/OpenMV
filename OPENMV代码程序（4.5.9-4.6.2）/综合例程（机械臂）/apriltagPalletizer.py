@@ -60,7 +60,7 @@ class ApriltagPalletizer():
         # 机械臂回到“待命位”
         # 协议：$KMS:x,y,z,speed!
         self.uart.write("$KMS:{:03d},{:03d},{:03d},1000!\n"
-                        .format(int(self.move_x), int(self.move_y), 120))
+                        .format(int(self.move_x), int(self.move_y), 70))
         time.sleep_ms(1000)
 
     # ============================================================
@@ -120,7 +120,7 @@ class ApriltagPalletizer():
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x),
                                         -(int(self.move_y)),  # 注意负号！
-                                        120, 10))
+                                        70, 10))
                 time.sleep_ms(10)
 
             # ------------ 阶段 1：执行抓取 ------------
@@ -139,7 +139,7 @@ class ApriltagPalletizer():
                 # --- 4.2 旋转爪到合适角度并张开 ---
                 self.uart.write("{{#004P{:0^4}T1000!}}".format(spin_calw))  # 旋转
                 time.sleep_ms(100)
-                self.uart.write("{#005P1100T1000!}")  # 张开爪子
+                self.uart.write("{#005P1300T1000!}")  # 张开爪子
                 time.sleep_ms(1000)
 
                 # --- 4.3 计算下降深度（考虑微调量 cy/cz）---
@@ -153,18 +153,18 @@ class ApriltagPalletizer():
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x) - 30,
                                         -(int(self.move_y)) + 10,
-                                        120, 1000))
+                                        70, 1000))
                 time.sleep_ms(100)
 
                 # --- 4.5 再下降到物块 ---
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                .format(int(self.move_x) - 30,
+                                .format(int(self.move_x) - 30 - 10,
                                         -(int(self.move_y)) + 10,
                                         5 + cz, 1000))
                 time.sleep_ms(1200)
 
                 # --- 4.6 合爪抓取 ---
-                self.uart.write("{#005P1650T1000!}")
+                self.uart.write("{#005P1750T1000!}")
                 time.sleep_ms(1200)
 
                 # --- 4.7 抬升 ---
@@ -175,8 +175,8 @@ class ApriltagPalletizer():
                 time.sleep_ms(1200)
 
                 # --- 4.8 旋转到码垛区上方 ---
-                self.move_y = -200
-                self.move_x = 0
+                self.move_y = -190
+                self.move_x = 20
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x),
                                         -(int(self.move_y)),
@@ -191,18 +191,18 @@ class ApriltagPalletizer():
                                             10 + cz, 1000))
                 elif self.palletizer_cnt == 1:
                     self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                    .format(int(self.move_x) - 5,
+                                    .format(int(self.move_x),
                                             -(int(self.move_y)),
                                             10 + cz + 30, 1000))
                 elif self.palletizer_cnt == 2:
                     self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                    .format(int(self.move_x) - 10,
+                                    .format(int(self.move_x),
                                             -(int(self.move_y)),
                                             10 + cz + 30 + 30, 1000))
                 time.sleep_ms(1200)
 
                 # --- 4.10 放爪、抬升、回待命位 ---
-                self.uart.write("{#005P1100T1000!}")   # 张开爪子放物块
+                self.uart.write("{#005P1300T1000!}")   # 张开爪子放物块
                 time.sleep_ms(1200)
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x),
@@ -216,7 +216,7 @@ class ApriltagPalletizer():
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x),
                                         -(int(self.move_y)),
-                                        120, 1000))
+                                        70, 1000))
                 time.sleep_ms(1200)
 
                 # 完成一次循环

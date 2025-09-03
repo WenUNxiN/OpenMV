@@ -224,7 +224,7 @@ class GarbageSortingArm:
         if self.stage == 1:
             if self.move_status == 0:
                 # 1. 张开
-                self.uart.write("{#005P1200T1000!}")
+                self.uart.write("{#005P1300T1000!}")
                 time.sleep_ms(1000)
 
                 # 2. 计算落点（补偿）
@@ -241,11 +241,11 @@ class GarbageSortingArm:
 
                 # 4. 下降
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                .format(int(self.move_x)-25, -int(self.move_y)+10, 5+cz, 1000))
+                                .format(int(self.move_x)-25-5, -int(self.move_y)+10, 5+cz, 1000))
                 time.sleep_ms(1200)
 
                 # 5. 合爪
-                self.uart.write("{#005P1650T1000!}")
+                self.uart.write("{#005P1750T1000!}")
                 time.sleep_ms(1200)
 
                 # 6. 抬起
@@ -314,11 +314,22 @@ class GarbageSortingArm:
                             .format(int(self.move_x), -int(self.move_y), 120, 1000))
             time.sleep_ms(1000)
 
-            self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                            .format(int(self.move_x), -int(self.move_y), 5+cz+90, 1000))
-            time.sleep_ms(1200)
+            if self.target_class == "harmful":
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x) + 30, -int(self.move_y) + 30, 5+cz+100, 1000))
+                time.sleep_ms(1200)
 
-            self.uart.write("{#005P1200T1000!}")   # 张开
+            elif self.target_class == "kitchen":
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x), -int(self.move_y) + 30, 5+cz+100, 1000))
+                time.sleep_ms(1200)
+
+            elif self.target_class == "recoverable":
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(int(self.move_x)-25, -int(self.move_y)+35, 5+cz+100, 1000))
+                time.sleep_ms(1200)
+
+            self.uart.write("{#005P1300T1000!}")   # 张开
             time.sleep_ms(1200)
 
             self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"

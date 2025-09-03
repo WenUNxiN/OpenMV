@@ -19,8 +19,7 @@ class ColorSort():
     # ---------------- 类变量：颜色阈值（LAB 空间） ----------------
     red_threshold    = (0, 100,  20, 127,   0, 127)
     blue_threshold   = (0, 100, -128, 127,-128, -15)
-    green_threshold  = (0, 100, -128, -28,  0,  70)
-    # （黄色阈值保留，但代码里未使用）
+    green_threshold  = (0, 49, -22, -39, 74, 2)
 
     # ---------------- 硬件资源：串口 + LED PWM ----------------
     uart = UART(3, 115200)
@@ -154,7 +153,7 @@ class ColorSort():
                 time.sleep_ms(100)
 
                 # 1. 张开爪子
-                self.uart.write("{#005P1100T1000!}")
+                self.uart.write("{#005P1300T1000!}")
                 time.sleep_ms(1000)
 
                 # 2. 计算机械臂末端到目标直线下落点（含微调）
@@ -171,16 +170,21 @@ class ColorSort():
 
                 # 4. 下降
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                .format(int(self.move_x) - 25, -int(self.move_y) + 10, 5 + cz, 1000))
+                                .format(int(self.move_x) - 25 - 10, -int(self.move_y) + 10, 5 + cz, 1000))
                 time.sleep_ms(1200)
 
                 # 5. 合爪
-                self.uart.write("{#005P1650T1000!}")
+                self.uart.write("{#005P1750T1000!}")
                 time.sleep_ms(1200)
 
                 # 6. 抬升
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x), -int(self.move_y), 120, 1000))
+                time.sleep_ms(1200)
+
+                # 6. 抬升
+                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                .format(150, 0, 120, 1000))
                 time.sleep_ms(1200)
 
                 # 7. 旋转到对应颜色的放置区
@@ -233,10 +237,21 @@ class ColorSort():
                                 .format(int(self.move_x) - 10, -int(self.move_y) + 30, 120, 1000))
                 time.sleep_ms(1000)
 
-                # 下降
-                self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                .format(int(self.move_x) - 10, -int(self.move_y) + 30, 5 + cz, 1000))
-                time.sleep_ms(1200)
+                if color_status == 'R':
+                    # 下降
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                    .format(int(self.move_x) + 5, -int(self.move_y) + 30, 5 + cz + 100, 1000))
+                    time.sleep_ms(1200)
+                if color_status == 'G':
+                    # 下降
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                    .format(int(self.move_x) - 10, -int(self.move_y) + 30, 5 + cz + 100, 1000))
+                    time.sleep_ms(1200)
+                if color_status == 'B':
+                    # 下降
+                    self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
+                                    .format(int(self.move_x) - 10, -int(self.move_y) + 30, 5 + cz + 100, 1000))
+                    time.sleep_ms(1200)
 
                 # 张开爪子放物块
                 self.uart.write("{#005P1100T1000!}")
