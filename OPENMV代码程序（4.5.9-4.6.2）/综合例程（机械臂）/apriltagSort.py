@@ -196,17 +196,17 @@ class ApriltagSort():
                 if place_id == 1: # 1
                     # 下降
                     self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                    .format(int(self.move_x) + 10, -int(self.move_y) - 35 - 20, 5 + cz, 1000))
+                                    .format(int(self.move_x) + 10, -int(self.move_y) - 35 - 10, 5 + cz, 1000))
 
                 elif place_id == 2:
                     # 下降
                     self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                    .format(int(self.move_x) - 15, -int(self.move_y) - 35 - 20, 5 + cz, 1000))
+                                    .format(int(self.move_x) - 15 -10, -int(self.move_y) - 35, 5 + cz, 1000))
 
                 elif place_id == 3:
                     # 下降
                     self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
-                                    .format(int(self.move_x) - 20 - 20, -int(self.move_y) - 35, 5 + cz, 1000))
+                                    .format(int(self.move_x) - 20 - 20, -int(self.move_y) - 25, 5 + cz, 1000))
 
                 time.sleep_ms(1200)
                 self.uart.write("{#005P1100T1000!}")        # 张开爪子放下
