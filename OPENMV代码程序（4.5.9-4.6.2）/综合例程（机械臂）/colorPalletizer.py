@@ -25,6 +25,12 @@ class ColorPalletizer():
 
     mid_block_cnt=0#机械臂移到色块中心计数
     palletizer_cnt=0#记录码垛的数量
+    
+    def clamp(self):
+        self.uart.write("{#005P1600T1000!}")#机械爪抓取物块
+
+    def loosen(self):
+        self.uart.write("{#005P1200T1000!}")#机械爪松开物块
 
     def init(self):#初始化
         sensor.reset() #初始化摄像头
@@ -130,12 +136,12 @@ class ColorPalletizer():
                 #移动机械臂到物块上方
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) - 25, -(int(self.move_y)), 120, 1000))
                 time.sleep_ms(100)
-                self.uart.write("{#005P1300T1000!}")#张开爪子
+                self.loosen()#张开爪子
                 time.sleep_ms(1000)
                 #移动机械臂下移到物块
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) - 25 - 20, -(int(self.move_y)) + 10, 15+cz, 1000))
                 time.sleep_ms(1200)
-                self.uart.write("{#005P1750T1000!}")#机械爪抓取物块
+                self.clamp()#机械爪抓取物块
                 time.sleep_ms(1200)
                 #移动机械臂抬起
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 120, 1000))
@@ -154,7 +160,7 @@ class ColorPalletizer():
                     #需要根据实际调整数据
                     self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 15+cz+30+30, 1000))
                 time.sleep_ms(1200)
-                self.uart.write("{#005P1300T1000!}")#张开爪子
+                self.loosen()#张开爪子
                 time.sleep_ms(1200)
                 #移动机械臂抬起
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 120, 1000))

@@ -38,6 +38,12 @@ class ColorSort():
     mid_block_cnt = 0         # 连续对准计数器
     move_status = 0           # 状态机阶段
 
+    def clamp(self):
+        self.uart.write("{#005P1600T1000!}")#机械爪抓取物块
+
+    def loosen(self):
+        self.uart.write("{#005P1200T1000!}")#机械爪松开物块
+        
     # ============================================================
     # 函数：init() —— 摄像头、串口、机械臂的初始化
     # ============================================================
@@ -153,7 +159,7 @@ class ColorSort():
                 time.sleep_ms(100)
 
                 # 1. 张开爪子
-                self.uart.write("{#005P1300T1000!}")
+                self.loosen()
                 time.sleep_ms(1000)
 
                 # 2. 计算机械臂末端到目标直线下落点（含微调）
@@ -174,7 +180,7 @@ class ColorSort():
                 time.sleep_ms(1200)
 
                 # 5. 合爪
-                self.uart.write("{#005P1750T1000!}")
+                self.clamp()
                 time.sleep_ms(1200)
 
                 # 6. 抬升
@@ -254,7 +260,7 @@ class ColorSort():
                     time.sleep_ms(1200)
 
                 # 张开爪子放物块
-                self.uart.write("{#005P1100T1000!}")
+                self.loosen()
                 time.sleep_ms(1200)
 
                 # 抬升

@@ -1,124 +1,138 @@
-import sensor, image, time,math
-from pyb import Pin,Timer,UART
+import sensor, image, time, math
+from pyb import Pin, Timer, UART
 
 class FaceTrack():
-    sensor.reset() #初始化摄像头
-    sensor.set_pixformat(sensor.GRAYSCALE) #图像格式为 RGB565 灰度 GRAYSCALE
-    sensor.set_framesize(sensor.HQVGA) #QQVGA: 240x160
-    sensor.skip_frames(n=2000) #在更改设置后，跳过n张照片，等待感光元件变稳定
-    sensor.set_auto_gain(True) #使用颜色识别时需要关闭自动自动增益
-    sensor.set_auto_whitebal(True)#使用颜色识别时需要关闭自动自动白平衡
+    # ---------- 类变量 ----------
+    sensor.reset()
+    sensor.set_pixformat(sensor.GRAYSCALE)
+    sensor.set_framesize(sensor.HQVGA)      # 240×160
+    sensor.skip_frames(n=2000)
+    sensor.set_auto_gain(True)
+    sensor.set_auto_whitebal(True)
 
-    # 加载Haar算子
-    # 默认情况下，这将使用所有阶段，更低的satges更快，但不太准确。
     face_cascade = image.HaarCascade("frontalface", stages=10)
-    #image.HaarCascade(path, stages=Auto)加载一个haar模型。haar模型是二进制文件，
-    #这个模型如果是自定义的，则引号内为模型文件的路径；也可以使用内置的haar模型，
-    #比如“frontalface” 人脸模型或者“eye”人眼模型。
-    #stages值未传入时使用默认的stages。stages值设置的小一些可以加速匹配，但会降低准确率。
     print(face_cascade)
 
-    uart = UART(3,115200)   #设置串口波特率，与stm32一致
-    uart.init(115200, bits=8, parity=None, stop=1 )
+    uart = UART(3, 115200)
+    uart.init(115200, bits=8, parity=None, stop=1)
 
-    tim = Timer(4, freq=1000) # Frequency in Hz
+    tim = Timer(4, freq=1000)
     led_dac = tim.channel(1, Timer.PWM, pin=Pin("P7"), pulse_width_percent=50)
     led_dac.pulse_width_percent(50)
 
-    mid_block_cx=120
-    mid_block_cy=80
+    mid_block_cx = 120      # 画面中心
+    mid_block_cy = 80
 
-    move_x = 0
-    move_y = 0
+    servo0 = 1500           # 水平舵机
+    servo1 = 1500           # 垂直舵机
 
-    servo0=1500
-    servo1=1500
-    uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!}}\n".format(servo0,servo1))
-
-    servo_option=1#操作舵机选择
-
-    def init(self,cx=80.5,cy=60.5):#初始化巡线配置，传入两个参数调整中位值
-        sensor.reset() #初始化摄像头
-        # HQVGA和灰度对于人脸识别效果最好
-        sensor.set_pixformat(sensor.GRAYSCALE) #图像格式为 RGB565 灰度 GRAYSCALE
-        sensor.set_framesize(sensor.HQVGA) #QQVGA: 240x160
-        sensor.skip_frames(n=2000) #在更改设置后，跳过n张照片，等待感光元件变稳定
-        sensor.set_auto_gain(True) #使用颜色识别时需要关闭自动自动增益
-        sensor.set_auto_whitebal(True)#使用颜色识别时需要关闭自动自动白平衡
+    # ---------- 初始化 ----------
+    def init(self, cx=120, cy=80):
+        sensor.reset()
+        sensor.set_pixformat(sensor.GRAYSCALE)
+        sensor.set_framesize(sensor.HQVGA)
+        sensor.skip_frames(n=2000)
+        sensor.set_auto_gain(True)
+        sensor.set_auto_whitebal(True)
 
         self.uart.init(115200, bits=8, parity=None, stop=1)
         self.led_dac.pulse_width_percent(0)
 
-        self.servo_option=1#操作舵机选择
+        self.mid_block_cx = cx
+        self.mid_block_cy = cy
 
-        move_x = 0
-        move_y = 0
-        mid_block_cx=120
-        mid_block_cy=80
+        self.servo0 = 1500
+        self.servo1 = 1500
 
-        servo0=1500
-        servo1=1500
-        self.uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!}}\n".format(servo0,servo1))
+        # 四个舵机回中
+        self.uart.write("{{#000P{:0>4d}T1500!#001P{:0>4d}T1500!}}\n"
+                        .format(self.servo0, self.servo1))
 
-    def run_track(self):#追踪
-        cx = self.mid_block_cx
-        cy = self.mid_block_cy
-        # 拍摄一张照片
+    # ---------- 主循环 ----------
+    def run(self):
         img = sensor.snapshot()
-
-        # Find objects.
-        # Note: Lower scale factor scales-down the image more and detects smaller objects.
-        # Higher threshold results in a higher destection rate, with more false positives.
         faces = img.find_features(self.face_cascade, threshold=0.75, scale=1.2)
-        #image.find_features(cascade, threshold=0.5, scale=1.5),thresholds越大，
-        #匹配速度越快，错误率也会上升。scale可以缩放被匹配特征的大小。
 
-        #在找到的目标上画框，标记出来
         if faces:
-            #追踪人脸
-            max_size = 0
-            max_blob=faces[0]
-            for blob in faces:#寻找最大人脸
-                if blob[2] * blob[3] > max_size:
-                    max_blob = blob
-                    max_size = blob[2] * blob[3]
-            face=max_blob
-
+            # 最大人脸
+            max_blob = max(faces, key=lambda b: b[2] * b[3])
+            face = max_blob
             cx = int(face[0] + face[2] / 2)
             cy = int(face[1] + face[3] / 2)
-            img.draw_rectangle(face,color=(255,0,0))
-            img.draw_cross(cx, cy)               # 在目标区域的中心点处画十字
 
-            #************************运动机械臂**********************************
-            if abs(cx - self.mid_block_cx)>=5:
-                if cx > self.mid_block_cx:
-                    self.move_x=-0.5*abs(cx-self.mid_block_cx)
-                else:
-                    self.move_x=0.5*abs(cx-self.mid_block_cx)
+            img.draw_rectangle(face, color=(255, 255, 255))
+            img.draw_cross(cx, cy)
 
+            # ====== 方案 A：比例 + 增量限幅（简单有效） ======
+            dead_x, dead_y = 6, 4          # 死区再放大一点
+            kp_x, kp_y = 0.12, 0.15       # kp_y 取负值，消除方向相反的问题
+            max_step = 4                   # 每帧最大步进再减小
 
-            if abs(cy - self.mid_block_cy)>=2:
-                if cy > self.mid_block_cy:
-                    self.move_y=-0.8*abs(cy-self.mid_block_cy)
-                else:
-                    self.move_y=0.58*abs(cy-self.mid_block_cy)
+            err_x = (self.mid_block_cx - cx) * kp_x
+            err_y = (self.mid_block_cy - cy) * kp_y   # 负号已放到 kp_y 里了
 
-                if self.servo_option==1:
-                    self.servo_option=2
-                    self.servo1=int(self.servo1+self.move_y)
-                elif self.servo_option==2:
-                    self.servo_option=1
-                    self.servo0=int(self.servo0+self.move_x)
+            move_x = max(-max_step, min(max_step, int(err_x)))
+            move_y = max(-max_step, min(max_step, int(err_y)))
+            # ---------------------------------------------------------
+
+            # 如需方案 B EMA，请把上面两行换成下面两行：
+            # move_x = self.ema_filter(err_x, 0.25, 'x')
+            # move_y = self.ema_filter(err_y, 0.25, 'y')
+
+            # 如需方案 C PID，请把上面两行换成：
+            # move_x = self.pid(err_x, 'x')
+            # move_y = self.pid(err_y, 'y')
 
             if self.servo0>2400: self.servo0=2400
             elif self.servo0<650: self.servo0=650
             if self.servo1>2400: self.servo1=2400
             elif self.servo1<500: self.servo1=500
-            #print("move_x",self.move_x,"move_y",self.move_y,"self.servo0",self.servo0,"self.servo1",self.servo1)
-            self.uart.write("{{#000P{:0>4d}T0000!#001P{:0>4d}T0000!}}\n".format(self.servo0,self.servo1))
+
+            # 更新舵机
+            self.servo0 = max(650, min(2400, self.servo0 + move_x))
+            self.servo1 = max(500, min(2400, self.servo1 + move_y))
+
+            self.uart.write("{{#000P{:0>4d}T0000!#001P{:0>4d}T0000!}}\n"
+                            .format(self.servo0, self.servo1))
             time.sleep_ms(10)
 
+    # ---------- 方案 B：EMA 滤波 ----------
+    # alpha: 0~1，越小越平滑
+    _ema_x, _ema_y = 0.0, 0.0
 
+    def ema_filter(self, err, alpha, axis):
+        if axis == 'x':
+            self._ema_x = alpha * err + (1 - alpha) * self._ema_x
+            return int(self._ema_x)
+        else:
+            self._ema_y = alpha * err + (1 - alpha) * self._ema_y
+            return int(self._ema_y)
+
+    # ---------- 方案 C：PID ----------
+    # 仅做 PI，Kd=0
+    _intg_x, _intg_y = 0.0, 0.0
+    _last_x, _last_y = 0.0, 0.0
+    Kp_x, Ki_x = 0.25, 0.03
+    Kp_y, Ki_y = 0.30, 0.04
+
+    def pid(self, err, axis):
+        if axis == 'x':
+            self._intg_x += err
+            self._intg_x = max(-100, min(100, self._intg_x))
+            out = int(self.Kp_x * err + self.Ki_x * self._intg_x)
+            return max(-10, min(10, out))     # 增量限幅
+        else:
+            self._intg_y += err
+            self._intg_y = max(-100, min(100, self._intg_y))
+            out = int(self.Kp_y * err + self.Ki_y * self._intg_y)
+            return max(-10, min(10, out))
+
+# ---------- 入口 ----------
+if __name__ == "__main__":
+    app = FaceTrack()
+    app.init()
+    while True:
+        app.run()
 
 
 

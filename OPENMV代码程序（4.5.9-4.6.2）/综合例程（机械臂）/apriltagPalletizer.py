@@ -32,6 +32,11 @@ class ApriltagPalletizer():
     block_degress = 0     # AprilTag 的旋转角（°）
     palletizer_cnt = 0    # 已完成的码垛次数（最多 3 次）
 
+    def clamp(self):
+        self.uart.write("{#005P1600T1000!}")#机械爪抓取物块
+
+    def loosen(self):
+        self.uart.write("{#005P1200T1000!}")#机械爪松开物块
     # ============================================================
     # 函数：init()
     # 功能：初始化摄像头、串口、LED、机械臂归位
@@ -139,7 +144,7 @@ class ApriltagPalletizer():
                 # --- 4.2 旋转爪到合适角度并张开 ---
                 self.uart.write("{{#004P{:0^4}T1000!}}".format(spin_calw))  # 旋转
                 time.sleep_ms(100)
-                self.uart.write("{#005P1300T1000!}")  # 张开爪子
+                self.loosen()  # 张开爪子
                 time.sleep_ms(1000)
 
                 # --- 4.3 计算下降深度（考虑微调量 cy/cz）---
@@ -164,7 +169,7 @@ class ApriltagPalletizer():
                 time.sleep_ms(1200)
 
                 # --- 4.6 合爪抓取 ---
-                self.uart.write("{#005P1750T1000!}")
+                self.clamp()
                 time.sleep_ms(1200)
 
                 # --- 4.7 抬升 ---
@@ -202,7 +207,7 @@ class ApriltagPalletizer():
                 time.sleep_ms(1200)
 
                 # --- 4.10 放爪、抬升、回待命位 ---
-                self.uart.write("{#005P1300T1000!}")   # 张开爪子放物块
+                self.loosen()   # 张开爪子放物块
                 time.sleep_ms(1200)
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x),

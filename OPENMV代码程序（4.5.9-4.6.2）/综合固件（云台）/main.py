@@ -1,10 +1,11 @@
 from pyb import UART, Pin,Timer
 import sensor,time
-import platform_color_tracing,apriltagTrack,faceTrack,numTrack
+import apriltagTrack,faceTrack,numTrack,colorTrace
 
 face_track = faceTrack.FaceTrack()
 april_tag_track = apriltagTrack.ApriltagTrack()
 num_track = numTrack.NumTrack()
+color_trace = colorTrace.ColorTrace()
 
 sensor.reset() #初始化摄像头
 sensor.set_pixformat(sensor.RGB565) #图像格式为 RGB565
@@ -52,7 +53,7 @@ while(True):
                     beep()
                 elif string.find("#PTZColorTrace!") >= 0 :#云台颜色追踪
                     run_app_status=1
-                    platform_color_tracing.init()
+                    color_trace.init()
                     beep()
                 elif string.find("#FaceTrack!") >= 0 :#人脸识别
                     run_app_status=2
@@ -74,9 +75,9 @@ while(True):
             print('Error:', e)
 
     if run_app_status==1:
-        platform_color_tracing.run()#运行平台颜色追踪
+        color_trace.run()#运行平台颜色追踪
     elif run_app_status==2:
-        face_track.run_track()#运行人脸追踪功能
+        face_track.run()#运行人脸追踪功能
     elif run_app_status==3:
         april_tag_track.run()#数字识别追踪
     elif run_app_status==4:

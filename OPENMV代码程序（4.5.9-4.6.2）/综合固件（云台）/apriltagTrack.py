@@ -83,7 +83,12 @@ class ApriltagTrack():
         self.uart.write("{{#000P{:0>4d}T0000!#001P{:0>4d}T0000!}}\n".format(self.servo0,self.servo1))
         time.sleep_ms(50)
 
+if __name__ == "__main__":
+    app=ApriltagTrack()
+    app.init()#初始化
 
+    while(1):
+        app.run()#运行功能
 
 
 

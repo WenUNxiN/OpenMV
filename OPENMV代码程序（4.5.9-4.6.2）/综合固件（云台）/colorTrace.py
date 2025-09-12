@@ -7,7 +7,7 @@ class ColorTrace():
     blue_threshold = (0, 100, -128, 127, -128, -15)
     green_threshold = (0, 100, -128, -28, 0, 70)
     yellow_threshold = (57, 100, -33, 70, 48, 127)
-    track_color_threshold = yellow_threshold#追踪的颜色
+    track_color_threshold = green_threshold#追踪的颜色
 
     uart = UART(3,115200)   #设置串口波特率，与stm32一致
     uart.init(115200, bits=8, parity=None, stop=1 )
@@ -88,7 +88,12 @@ class ColorTrace():
             self.uart.write("{{#000P{:0>4d}T0000!#001P{:0>4d}T0000!}}\n".format(self.servo0,self.servo1))
             time.sleep_ms(50)
 
+if __name__ == "__main__":
+    app=ColorTrace()
+    app.init()#初始化
 
+    while(1):
+        app.run()#运行功能
 
 
 

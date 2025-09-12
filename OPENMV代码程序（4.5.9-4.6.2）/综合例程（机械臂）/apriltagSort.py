@@ -26,6 +26,11 @@ class ApriltagSort():
     # 例：place_id_map = {1:10, 2:20}
     place_id_map = {}
 
+    def clamp(self):
+        self.uart.write("{#005P1600T1000!}")#机械爪抓取物块
+
+    def loosen(self):
+        self.uart.write("{#005P1200T1000!}")#机械爪松开物块
     # =========================  初始化摄像头  =========================
     def init(self):
         sensor.reset()
@@ -128,7 +133,7 @@ class ApriltagSort():
                 self.move_y = (l + 85 + cy) * cos + cx
                 self.move_x = (l + 85 + cy) * sin
                 time.sleep_ms(100)
-                self.uart.write("{#005P1300T1000!}")        # 张开爪子
+                self.loosen()        # 张开爪子
                 time.sleep_ms(100)
 
                 # 移动到目标上方
@@ -139,7 +144,7 @@ class ApriltagSort():
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
                                 .format(int(self.move_x) - 30 - 10, -int(self.move_y) + 10, 5 + cz, 1000))
                 time.sleep_ms(1200)
-                self.uart.write("{#005P1750T1000!}")        # 闭合爪子
+                self.clamp()        # 闭合爪子
                 time.sleep_ms(1200)
                 # 抬起
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
@@ -209,7 +214,7 @@ class ApriltagSort():
                                     .format(int(self.move_x) - 20 - 20, -int(self.move_y) - 25, 5 + cz, 1000))
 
                 time.sleep_ms(1200)
-                self.uart.write("{#005P1100T1000!}")        # 张开爪子放下
+                self.loosen()        # 张开爪子放下
                 time.sleep_ms(1200)
 
                 # 抬起

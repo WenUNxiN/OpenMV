@@ -54,6 +54,12 @@ class ApriltagNumSort():
 
     cap_num_status=0#抓取物块颜色标志，用来判断物块抓取的顺序
 
+    def clamp(self):
+        self.uart.write("{#005P1600T1000!}")#机械爪抓取物块
+
+    def loosen(self):
+        self.uart.write("{#005P1200T1000!}")#机械爪松开物块
+
     def init(self):
         sensor.reset() #初始化摄像头
         sensor.set_pixformat(sensor.GRAYSCALE) #图像格式为 RGB565 灰度 GRAYSCALE
@@ -200,12 +206,12 @@ class ApriltagNumSort():
                 #移动机械臂到物块上方
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 25 - 10, -(int(self.move_y)), 50, 1000))
                 time.sleep_ms(100)
-                self.uart.write("{#005P1100T1000!}")
+                self.loosen()#机械爪松开物块
                 time.sleep_ms(1000)
                 #移动机械臂下移到物块
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x)  - 25 - 10, -(int(self.move_y)), 5+cz, 1000))
                 time.sleep_ms(1200)
-                self.uart.write("{#005P1750T1000!}")#机械爪抓取物块
+                self.clamp()#机械爪抓取物块
                 time.sleep_ms(1200)
                 #移动机械臂抬起
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 50, 1000))
@@ -269,7 +275,7 @@ class ApriltagNumSort():
                 elif self.cap_num_status==3:
                     self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x) - 20, -(int(self.move_y)) - 40, 5+cz, 1000))
                 time.sleep_ms(1200)
-                self.uart.write("{#005P1300T1000!}")#机械爪放下物块
+                self.loosen()#机械爪松开物块
                 time.sleep_ms(1200)
                 #移动机械臂抬起
                 self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n".format(int(self.move_x), -(int(self.move_y)), 50, 1000))

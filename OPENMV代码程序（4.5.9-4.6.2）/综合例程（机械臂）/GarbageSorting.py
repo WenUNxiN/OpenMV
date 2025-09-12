@@ -104,6 +104,12 @@ class GarbageSortingArm:
     MID_X = IMG_W // 2
     MID_Y = IMG_H // 2
 
+    def clamp(self):
+        self.uart.write("{#005P1600T1000!}")#机械爪抓取物块
+
+    def loosen(self):
+        self.uart.write("{#005P1200T1000!}")#机械爪松开物块
+
     # ==========================================================
     # 初始化
     # ==========================================================
@@ -223,8 +229,8 @@ class GarbageSortingArm:
         # ---------- stage 1：抓取 ----------
         if self.stage == 1:
             if self.move_status == 0:
-                # 1. 张开
-                self.uart.write("{#005P1300T1000!}")
+                # 1. 张开爪子
+                self.loosen()
                 time.sleep_ms(1000)
 
                 # 2. 计算落点（补偿）
@@ -245,7 +251,7 @@ class GarbageSortingArm:
                 time.sleep_ms(1200)
 
                 # 5. 合爪
-                self.uart.write("{#005P1750T1000!}")
+                self.clamp()
                 time.sleep_ms(1200)
 
                 # 6. 抬起
@@ -329,7 +335,7 @@ class GarbageSortingArm:
                                 .format(int(self.move_x)-25, -int(self.move_y)+35, 5+cz+100, 1000))
                 time.sleep_ms(1200)
 
-            self.uart.write("{#005P1300T1000!}")   # 张开
+            self.loosen()   # 张开爪子
             time.sleep_ms(1200)
 
             self.uart.write("$KMS:{:03d},{:03d},{:03d},{:03d}!\n"
