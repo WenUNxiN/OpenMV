@@ -122,7 +122,8 @@ class GarbageSortingArm:
         sensor.set_auto_whitebal(False)
         time.sleep_ms(1000)
 
-        self.led_dac.pulse_width_percent(10)
+        self.led_dac.pulse_width_percent(0)
+
         self.uart.write("$KMS:{:03d},{:03d},{:03d},1000!\n"
                         .format(int(self.move_x), int(self.move_y), 50))
         time.sleep_ms(1000)

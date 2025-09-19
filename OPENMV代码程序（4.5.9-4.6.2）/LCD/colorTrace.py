@@ -1,5 +1,6 @@
 import sensor, time
 from pyb import Pin,Timer,UART
+import display #导入LCD库
 
 class ColorTrace():
     red_threshold = (0, 100, 20, 127, 0, 127)
@@ -31,6 +32,9 @@ class ColorTrace():
         sensor.set_auto_whitebal(True)#使用颜色识别时需要关闭自动自动白平衡
 
         self.led_dac.pulse_width_percent(100)
+		
+		lcd = display.SPIDisplay()           # OpenMV 会自动识别 ST7735
+        self.lcd = lcd                       # 保存到实例变量，后面复用
 
         #机械臂移动位置
         self.servo0 = 1500
@@ -83,6 +87,8 @@ class ColorTrace():
 
             self.uart.write("{{#000P{:0>4d}T0000!#001P{:0>4d}T0000!}}\n".format(self.servo0,self.servo1))
             time.sleep_ms(50)
+			
+		self.lcd.write(img) # 在LCD中显示
 
 
 if __name__ == "__main__":

@@ -1,7 +1,6 @@
 # ========================== 1. 库导入 ==========================
 import sensor, time, math            # sensor：OpenMV 相机驱动；time：延时；math：数学计算
 from pyb import Pin, Timer, UART     # pyb：OpenMV 的 PyBoard 硬件抽象层（GPIO、定时器、串口）
-
 # ========================== 2. 主类定义 ==========================
 class ColorSort():
     """
@@ -63,6 +62,7 @@ class ColorSort():
         self.move_status = 0
 
         self.led_dac.pulse_width_percent(100)
+        
         # 机械臂回到待命位
         self.uart.write("$KMS:{:03d},{:03d},{:03d},1000!\n"
                         .format(int(self.move_x), int(self.move_y), 120))
