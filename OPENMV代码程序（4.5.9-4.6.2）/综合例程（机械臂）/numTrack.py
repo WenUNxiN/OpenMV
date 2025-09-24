@@ -1,149 +1,103 @@
-import sensor, image, time,math,os, ml, math, uos, gc
-from pyb import Pin,Timer,UART
-import ustruct
+# 数字追踪（单目标 PID 云台版）——精简注释版
+import sensor, image, time, math, uos, gc, ml
+from pyb import Pin, Timer, UART
 
-class NumTrack():
-    sensor.reset() #初始化摄像头
-    sensor.set_pixformat(sensor.GRAYSCALE) #图像格式为 RGB565 灰度 GRAYSCALE
-    sensor.set_framesize(sensor.QQVGA) #QQVGA: 160x120
-    sensor.skip_frames(n=2000) #在更改设置后，跳过n张照片，等待感光元件变稳定
-    sensor.set_auto_gain(True) #使用颜色识别时需要关闭自动自动增益
-    sensor.set_auto_whitebal(True)#使用颜色识别时需要关闭自动自动白平衡
-
-    net = None
-    labels = None
+class NumTrack:
+    # ---------------- 类静态变量 ----------------
     min_confidence = 0.7
+    colors = [(255,0,0),(0,255,0),(255,255,0),(0,0,255),(255,0,255),(0,255,255),(255,255,255)]
+    threshold_list = [(int(min_confidence * 255), 255)]
 
+    # 加载模型与标签（仅一次）
     try:
-        # load the model, alloc the model file on the heap if we have at least 64K free after loading
-        net = ml.Model("trained.tflite", load_to_fb=uos.stat('trained.tflite')[6] > (gc.mem_free() - (64*1024)))
+        net = ml.Model("trained.tflite",
+                       load_to_fb=uos.stat('trained.tflite')[6] > (gc.mem_free() - 64*1024))
+        labels = [l.rstrip('\n') for l in open("labels.txt")]
     except Exception as e:
-        raise Exception('Failed to load "trained.tflite", did you copy the .tflite and labels.txt file onto the mass-storage device? (' + str(e) + ')')
+        raise Exception("模型/标签加载失败: " + str(e))
 
-    try:
-        labels = [line.rstrip('\n') for line in open("labels.txt")]
-    except Exception as e:
-        raise Exception('Failed to load "labels.txt", did you copy the .tflite and labels.txt file onto the mass-storage device? (' + str(e) + ')')
+    # 硬件资源
+    uart = UART(3, 115200)
+    uart.init(115200, bits=8, parity=None, stop=1)
+    tim = Timer(4, freq=1000)
+    led = tim.channel(1, Timer.PWM, pin=Pin("P7"))
+    led.pulse_width_percent(50)          # 默认亮度
 
-    colors = [ # Add more colors if you are detecting more than 7 types of classes at once.
-        (255,   0,   0),
-        (  0, 255,   0),
-        (255, 255,   0),
-        (  0,   0, 255),
-        (255,   0, 255),
-        (  0, 255, 255),
-        (255, 255, 255),
-    ]
+    # 图像中心参考
+    mid_cx, mid_cy = 80, 60
 
-    threshold_list = [(math.ceil(min_confidence * 255), 255)]
+    # 舵机初始 PWM（μs）
+    servo0, servo1 = 1500, 1250
 
-    uart = UART(3,115200)   #设置串口波特率，与stm32一致
-    uart.init(115200, bits=8, parity=None, stop=1 )
-
-    tim = Timer(4, freq=1000) # Frequency in Hz
-    led_dac = tim.channel(1, Timer.PWM, pin=Pin("P7"), pulse_width_percent=50)
-    led_dac.pulse_width_percent(50)
-
-    mid_block_cx=80.5
-    mid_block_cy=60.5
-
-    servo0 = 1500
-    servo1 = 1250
-
-    def fomo_post_process(self,model, inputs, outputs):
-        ob, oh, ow, oc = model.output_shape[0]
-
-        x_scale = inputs[0].roi[2] / ow
-        y_scale = inputs[0].roi[3] / oh
-
-        scale = min(x_scale, y_scale)
-
-        x_offset = ((inputs[0].roi[2] - (ow * scale)) / 2) + inputs[0].roi[0]
-        y_offset = ((inputs[0].roi[3] - (ow * scale)) / 2) + inputs[0].roi[1]
-
-        l = [[] for i in range(oc)]
-
-        for i in range(oc):
-            img = image.Image(outputs[0][0, :, :, i] * 255)
-            blobs = img.find_blobs(
-                self.threshold_list, x_stride=1, y_stride=1, area_threshold=1, pixels_threshold=1
-            )
-            for b in blobs:
-                rect = b.rect()
-                x, y, w, h = rect
-                score = (
-                    img.get_statistics(thresholds=self.threshold_list, roi=rect).l_mean() / 255.0
-                )
-                x = int((x * scale) + x_offset)
-                y = int((y * scale) + y_offset)
-                w = int(w * scale)
-                h = int(h * scale)
-                l[i].append((x, y, w, h, score))
-        return l
-
-    def init(self,cx=80.5,cy=60.5):#初始化巡线配置，传入两个参数调整中位值
-        sensor.reset() #初始化摄像头
-        sensor.set_pixformat(sensor.GRAYSCALE) #图像格式为 RGB565 灰度 GRAYSCALE
-        sensor.set_framesize(sensor.QQVGA) #QQVGA: 160x120
-        sensor.skip_frames(n=2000) #在更改设置后，跳过n张照片，等待感光元件变稳定
-        sensor.set_auto_gain(True) #使用颜色识别时需要关闭自动自动增益
-        sensor.set_auto_whitebal(True)#使用颜色识别时需要关闭自动自动白平衡
-
-        self.uart.init(115200, bits=8, parity=None, stop=1 )
-        self.led_dac.pulse_width_percent(10)
-
-        self.mid_block_cx=cx
-        self.mid_block_cy=cy
-
-        self.cap_num_status= 3 #追踪物块的序号
-
-        self.uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!#002P{:0>4d}T1100!#003P{:0>4d}T1100!}}\n".format(self.servo0,self.servo1,1750,860))
-
+    # ---------------- 初始化 ----------------
+    def init(self, cx=80.5, cy=60.5):
+        """只调图像中心与舵机起始位置，不再重复配置摄像头"""
+        self.mid_cx, self.mid_cy = cx, cy
+        self.led.pulse_width_percent(10)   # 降低照明
+        # 四舵机一次性复位（0/1 云台，2/3 备用）
+        self.uart.write("{{#000P{:04d}T1100!#001P{:04d}T1100!#002P1750T1100!#003P0860T1100!}}\n"
+                        .format(self.servo0, self.servo1))
         time.sleep_ms(1000)
 
-    def run(self):#追踪
-        #物块中心点
-        block_cx=self.mid_block_cx
-        block_cy=self.mid_block_cy
-        # 获取图像
+    # ---------------- TFLite 后处理 ----------------
+    def fomo_post_process(self, model, inputs, outputs):
+        """把 heatmap 转成框列表，每类一个 list"""
+        _, oh, ow, oc = model.output_shape[0]
+        roi = inputs[0].roi
+        scale = min(roi[2]/ow, roi[3]/oh)
+        x_offset = (roi[2] - ow*scale)/2 + roi[0]
+        y_offset = (roi[3] - oh*scale)/2 + roi[1]
+
+        res = [[] for _ in range(oc)]
+        for i in range(oc):
+            hm = image.Image(outputs[0][0, :, :, i] * 255)
+            for b in hm.find_blobs(self.threshold_list, x_stride=1, y_stride=1,
+                                   area_threshold=1, pixels_threshold=1):
+                x, y, w, h = b.rect()
+                score = hm.get_statistics(thresholds=self.threshold_list, roi=b.rect()).l_mean() / 255.0
+                # 映射回原图
+                x = int(x*scale + x_offset)
+                y = int(y*scale + y_offset)
+                w = int(w*scale)
+                h = int(h*scale)
+                res[i].append((x, y, w, h, score))
+        return res
+
+    # ---------------- 主循环 ----------------
+    def run(self):
+        """只追踪 self.cap_num_status 对应的数字"""
         img = sensor.snapshot()
+        block_cx, block_cy = self.mid_cx, self.mid_cy   # 默认值
 
-        for i, detection_list in enumerate(self.net.predict([img], callback=self.fomo_post_process)):
-            if (i == 0): continue # background class
-            if (len(detection_list) == 0): continue # no detections for this class?
-            for x, y, w, h, score in detection_list:
-                if i==self.cap_num_status:
-                    block_cx = x
-                    block_cy = y
-                    #print(" %s " % labels[i],block_cx,block_cy)
-                    img.draw_rectangle(x, y, w, h,color=(255,255,255))
-                    img.draw_cross(block_cx,block_cy,size=2,color=(255,0,0))
-                    img.draw_string(x, y-10, self.labels[i], color=(255,255,255))
+        # 1. 推理并画框
+        for i, dets in enumerate(self.net.predict([img], callback=self.fomo_post_process)):
+            if i == 0 or not dets: continue
+            for x, y, w, h, score in dets:
+                if i == 3:           # 这里固定追类别 3，可改 self.cap_num_status
+                    block_cx, block_cy = x, y
+                    img.draw_rectangle(x, y, w, h, color=(255, 255, 255))
+                    img.draw_cross(block_cx, block_cy, size=2, color=(255, 0, 0))
+                    img.draw_string(x, y-10, self.labels[i], color=(255, 255, 255))
 
-            #************************运动舵机**********************************
-            dead_x = 8
-            if abs(block_cx - 80) > dead_x:
-                move_x = (80 - block_cx) * 0.4   # 负反馈 + 低增益
-                self.servo0 = int(self.servo0 + move_x)
+        # 2. 简单 P 控制云台
+        dead_x, dead_y = 8, 4
+        if abs(block_cx - 80) > dead_x:
+            self.servo0 += int((80 - block_cx) * 0.4)
+        if abs(block_cy - 60) > dead_y:
+            self.servo1 += int((block_cy - 60) * 0.35)
 
-            dead_y = 4
-            if abs(block_cy - 60) > dead_y:
-                move_y = (block_cy - 60) * 0.35  # 竖直可以再小一点
-                self.servo1 = int(self.servo1 + move_y)
+        # 限幅
+        self.servo0 = max(650, min(2400, self.servo0))
+        self.servo1 = max(500, min(2400, self.servo1))
 
-
-        if self.servo0>2400: self.servo0=2400
-        elif self.servo0<650: self.servo0=650
-        if self.servo1>2400: self.servo1=2400
-        elif self.servo1<500: self.servo1=500
-
-        self.uart.write("{{#000P{:0>4d}T0000!#001P{:0>4d}T0000!}}\n".format(self.servo0,self.servo1))
-        time.sleep_ms(50)
+        # 3. 立即发送（T0000 表示最快速度）
+        self.uart.write("{{#000P{:04d}T0000!#001P{:04d}T0000!}}\n".format(self.servo0, self.servo1))
+        time.sleep_ms(50)   # 控制周期 20 Hz
 
 
+# ---------------- 上电运行 ----------------
 if __name__ == "__main__":
-    app=NumTrack()
-    app.init()#初始化
-
-    while(1):
-        app.run()#运行功能
+    app = NumTrack()
+    app.init()     # 设置中心与初始舵机角
+    while True:
+        app.run()  # 持续追踪

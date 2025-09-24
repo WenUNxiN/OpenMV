@@ -1,8 +1,8 @@
-# 二维码数字分拣
+# 数字分拣
 import sensor, image, time, ml, math, uos, gc
 from pyb import Pin,Timer,UART
 
-class ApriltagNumSort():
+class NumSort():
     net = None
     labels = None
     min_confidence = 0.5
@@ -134,17 +134,21 @@ class ApriltagNumSort():
         # 获取图像
         img = sensor.snapshot()
 
-        if self.apriltag_succeed_flag==0:#识别抓取标签
-
-            for tag in img.find_apriltags(): # defaults to TAG36H11 without "families".
-                img.draw_rectangle(tag.rect, color = (255, 0, 0))     #画框
-                img.draw_cross(tag.cx, tag.cy, color = (0, 255, 0)) #画十字
-                img.draw_string(tag.x, (tag.y-10), "{}".format(tag.id), color=(255,0,0))
-                block_cx=tag.cx
-                block_cy=tag.cy
-                self.block_degress = 180 * tag.rotation / math.pi                #求April Tags旋转的角度
-                self.cap_num_status=tag.id
-                block_read_succed=1
+        if self.apriltag_succeed_flag == 0:
+            best_num, best_score, bx, by = None, 0, 0, 0
+            for i, detection_list in enumerate(self.net.predict([img], callback=self.fomo_post_process)):
+                if i == 0 or not detection_list: continue
+                x, y, w, h, score = detection_list[0]
+                if score > best_score:
+                    best_num, best_score, bx, by = i, score, x, y
+                    img.draw_rectangle(x, y, w, h, color=(255, 255, 255))
+                    img.draw_cross(bx, by, size=2, color=(255, 0, 0))
+                    img.draw_string(x, y - 10, self.labels[i], color=(255, 255, 255))
+            if best_num is not None:
+                block_cx, block_cy = bx, by
+                self.cap_num_status = best_num
+                self.block_degress = 0
+                block_read_succed = 1
 
         elif self.apriltag_succeed_flag==1:#抓取到标签后数字分拣
 
@@ -291,7 +295,7 @@ class ApriltagNumSort():
 
 
 if __name__ == "__main__":
-    app=ApriltagNumSort()
+    app=NumSort()
     app.init()#初始化
 
     while(1):

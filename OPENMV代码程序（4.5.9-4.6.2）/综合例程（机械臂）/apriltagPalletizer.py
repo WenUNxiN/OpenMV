@@ -1,3 +1,4 @@
+# 二维码码垛
 # ========================== 1. 库导入 ==========================
 import sensor, time, math     # sensor：OpenMV 摄像头库；time：延时；math：数学计算
 from pyb import Pin, Timer, UART  # pyb：OpenMV 的 PyBoard 硬件抽象层（GPIO、定时器、串口）

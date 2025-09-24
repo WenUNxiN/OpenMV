@@ -1,3 +1,4 @@
+# 二维码分拣
 # =========================  头文件  =========================
 import sensor, time, math
 from pyb import Pin, Timer, UART

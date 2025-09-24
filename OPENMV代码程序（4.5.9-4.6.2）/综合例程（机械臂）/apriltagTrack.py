@@ -1,15 +1,9 @@
+# 二维码追踪
 import sensor, image, time,math,os, tf, math, uos, gc
 from pyb import Pin,Timer,UART
 import ustruct
 
 class ApriltagTrack():
-    sensor.reset() #初始化摄像头
-    sensor.set_pixformat(sensor.GRAYSCALE) #图像格式为 RGB565 灰度 GRAYSCALE
-    sensor.set_framesize(sensor.QQVGA) #QQVGA: 160x120
-    sensor.skip_frames(n=2000) #在更改设置后，跳过n张照片，等待感光元件变稳定
-    sensor.set_auto_gain(True) #使用颜色识别时需要关闭自动自动增益
-    sensor.set_auto_whitebal(True)#使用颜色识别时需要关闭自动自动白平衡
-
     uart = UART(3,115200)   #设置串口波特率，与stm32一致
     uart.init(115200, bits=8, parity=None, stop=1 )
 
@@ -23,8 +17,6 @@ class ApriltagTrack():
     servo0 = 1500
     servo1 = 1250
     #uart.write("{{#000P{:0>4d}T1100!#001P{:0>4d}T1100!}}\n".format(servo0, servo1))
-
-    servo_option = 1  # 操作舵机选择
 
     def init(self,cx=80.5,cy=60.5):#初始化巡线配置，传入两个参数调整中位值
         sensor.reset() #初始化摄像头
